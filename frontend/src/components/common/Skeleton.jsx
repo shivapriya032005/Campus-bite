@@ -8,3 +8,4 @@ export default function Skeleton({ className = '', variant = 'rect' }) {
 
   return <div className={`${base} ${variants[variant] || variants.rect} ${className}`} />;
 }
+

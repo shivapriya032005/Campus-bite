@@ -9,37 +9,35 @@ import {
   Clock,
   ShieldCheck,
   Utensils,
-  Coffee,
-  Pizza,
   Flame,
   Award,
-  Plus,
+  ChevronRight,
+  TrendingUp,
+  Percent,
 } from 'lucide-react';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
-import { useToast } from '../components/common/Toast';
 import Button from '../components/common/Button';
 import Card from '../components/common/Card';
-import Badge from '../components/common/Badge';
 import Skeleton from '../components/common/Skeleton';
-
-const CATEGORIES = [
-  { name: 'Burgers & Grills', icon: Flame, query: 'Burger' },
-  { name: 'Healthy Bowls', icon: Utensils, query: 'Bowl' },
-  { name: 'Artisan Pizza', icon: Pizza, query: 'Pizza' },
-  { name: 'Cold Brew & Cafes', icon: Coffee, query: 'Coffee' },
-];
+import SafeImage from '../components/common/SafeImage';
+import RestaurantCard from '../components/customer/RestaurantCard';
+import DishCard from '../components/customer/DishCard';
+import CategoryScroller from '../components/customer/CategoryScroller';
+import PromoCarousel from '../components/customer/PromoCarousel';
+import { PLACEHOLDERS } from '../utils/imageRegistry';
 
 export default function HomePage() {
   const [restaurants, setRestaurants] = useState([]);
+  const [popularDishes, setPopularDishes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [dishesLoading, setDishesLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [health, setHealth] = useState('checking');
 
   const { user } = useAuth();
   const cart = useCart();
-  const toast = useToast();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -51,8 +49,35 @@ export default function HomePage() {
 
     // Fetch featured restaurants
     api
-      .get('/restaurants', { params: { per_page: 6 } })
-      .then((res) => setRestaurants(res.data.restaurants || []))
+      .get('/restaurants', { params: { per_page: 8 } })
+      .then(async (res) => {
+        const rests = res.data.restaurants || [];
+        setRestaurants(rests);
+
+        // Fetch sample dishes from the first 3 restaurants for the popular dishes shelf
+        if (rests.length > 0) {
+          try {
+            const dishPromises = rests.slice(0, 4).map((r) =>
+              api
+                .get(`/menu-items/restaurant/${r.id}`)
+                .then((mRes) =>
+                  (mRes.data.items || []).map((dish) => ({
+                    ...dish,
+                    restaurant: r,
+                  }))
+                )
+                .catch(() => [])
+            );
+            const results = await Promise.all(dishPromises);
+            const combined = results.flat();
+            setPopularDishes(combined.slice(0, 6));
+          } catch (e) {
+            console.error('Failed to load sample dishes', e);
+          } finally {
+            setDishesLoading(false);
+          }
+        }
+      })
       .catch((err) => console.error('Failed to load restaurants', err))
       .finally(() => setLoading(false));
   }, []);
@@ -67,128 +92,169 @@ export default function HomePage() {
   };
 
   return (
-    <div className="space-y-20 pb-8">
-      {/* Editorial Hero Section */}
-      <section className="relative pt-6 sm:pt-12 text-center max-w-4xl mx-auto space-y-6">
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#C5A46D]/15 border border-[#C5A46D]/30 text-[#C5A46D] text-xs font-semibold tracking-wide">
-          <Sparkles className="w-3.5 h-3.5" />
-          <span>Curated Campus Gastronomy · Swift Dorm Delivery</span>
-        </div>
-
-        <h1 className="font-serif text-4xl sm:text-6xl lg:text-7xl font-bold text-white tracking-tight leading-[1.08]">
-          Exceptional meals.<br />
-          <span className="italic font-normal text-[#C5A46D]">Crafted for campus.</span>
-        </h1>
-
-        <p className="text-base sm:text-lg text-gray-300 max-w-2xl mx-auto font-sans leading-relaxed">
-          Discover culinary favorites from independent campus kitchens, track every preparation milestone in real-time, and experience effortless dorm delivery.
-        </p>
-
-        {/* Hero Search Bar */}
-        <div className="max-w-2xl mx-auto pt-3">
-          <form
-            onSubmit={handleSearchSubmit}
-            className="flex items-center bg-[#1A222E] border border-gray-700/80 hover:border-gray-600 focus-within:border-[#C5A46D] focus-within:ring-2 focus-within:ring-[#C5A46D]/20 rounded-2xl p-1.5 shadow-xl shadow-black/40 transition-all"
-          >
-            <div className="pl-4 pr-2 text-gray-400">
-              <Search className="w-5 h-5" />
-            </div>
-            <input
-              type="text"
-              placeholder="Search by restaurant name, cuisine, or dish..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="flex-1 bg-transparent border-none py-3 text-sm text-white placeholder-gray-400 focus:outline-none"
+    <div className="space-y-14 sm:space-y-16 pb-16">
+      {/* 1. Rich Food-First Hero Section with Visual Image Composition */}
+      <section className="relative rounded-3xl overflow-hidden bg-[#171F2C] border border-[#1E2633] shadow-2xl shadow-black/40">
+        <div className="relative min-h-[460px] sm:min-h-[500px] flex items-center">
+          {/* Background Rich Food Photography */}
+          <div className="absolute inset-0">
+            <SafeImage
+              src="/assets/banners/banner-campus-favs.jpg"
+              alt="Campus Gastronomy"
+              fallbackSrc={PLACEHOLDERS.restaurant}
+              aspectRatio="aspect-auto"
+              className="w-full h-full object-cover object-center filter brightness-90"
             />
-            <Button type="submit" variant="primary" size="md" className="rounded-xl shrink-0">
-              Explore Menu
-            </Button>
-          </form>
-
-          {/* Quick Category Chips */}
-          <div className="flex flex-wrap items-center justify-center gap-2 pt-4">
-            <span className="text-xs text-gray-400 font-medium mr-1">Trending:</span>
-            {CATEGORIES.map(({ name, query }) => (
-              <button
-                key={name}
-                onClick={() => navigate(`/restaurants?search=${encodeURIComponent(query)}`)}
-                className="text-xs px-3 py-1 rounded-full bg-[#1A222E] hover:bg-[#202631] text-gray-300 hover:text-white border border-gray-800 transition-colors cursor-pointer"
-              >
-                {name}
-              </button>
-            ))}
+            {/* Dark Editorial Gradient Overlays */}
+            <div className="absolute inset-0 bg-gradient-to-r from-gray-950 via-gray-950/85 to-gray-950/40" />
+            <div className="absolute inset-0 bg-gradient-to-t from-gray-950 via-transparent to-black/30" />
           </div>
-        </div>
 
-        {/* System Core Pill */}
-        <div className="pt-2 flex justify-center">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#1A222E]/80 border border-gray-800 text-[11px] text-gray-400">
-            <span
-              className={`w-2 h-2 rounded-full ${
-                health === 'connected'
-                  ? 'bg-[#248A62] animate-pulse'
-                  : health === 'checking'
-                  ? 'bg-amber-400'
-                  : 'bg-red-400'
-              }`}
-            />
-            <span>
-              Kitchen Core & Database:{' '}
-              <strong className="text-white font-medium">
-                {health === 'connected' ? 'Operational' : health === 'checking' ? 'Connecting...' : 'Offline'}
-              </strong>
-            </span>
+          {/* Hero Content */}
+          <div className="relative z-10 max-w-3xl px-6 sm:px-12 py-12 space-y-6">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#111827]/80 backdrop-blur-md border border-[#C5A46D]/40 text-[#C5A46D] text-xs font-bold tracking-wide shadow-lg">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Campus Food Discovery · 15-Min Dorm Delivery</span>
+            </div>
+
+            <h1 className="font-serif text-3xl sm:text-5xl lg:text-6xl font-bold text-white tracking-tight leading-[1.1]">
+              Craving something <br />
+              <span className="italic font-normal text-[#C5A46D]">delicious on campus?</span>
+            </h1>
+
+            <p className="text-sm sm:text-base text-gray-300 max-w-xl font-sans leading-relaxed">
+              Order fresh wood-fired pizzas, authentic dum biryanis, gourmet smash burgers, and energizing cold brews delivered straight to your dorm or study hall.
+            </p>
+
+            {/* Hero Search Bar */}
+            <div className="max-w-xl">
+              <form
+                onSubmit={handleSearchSubmit}
+                className="flex items-center bg-[#111827]/90 backdrop-blur-md border border-gray-700 hover:border-[#C5A46D] focus-within:border-[#C5A46D] focus-within:ring-2 focus-within:ring-[#C5A46D]/30 rounded-2xl p-1.5 shadow-2xl transition-all"
+              >
+                <div className="pl-3.5 pr-2 text-gray-400">
+                  <Search className="w-5 h-5" />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search for restaurants, biryani, burgers, pasta..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="flex-1 bg-transparent border-none py-2.5 text-xs sm:text-sm text-white placeholder-gray-400 focus:outline-none"
+                />
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="md"
+                  className="rounded-xl shrink-0 font-bold"
+                >
+                  Find Food
+                </Button>
+              </form>
+            </div>
+
+            {/* Quick Guarantees Strip */}
+            <div className="flex flex-wrap items-center gap-4 pt-1 text-xs text-gray-300">
+              <div className="flex items-center gap-1.5">
+                <Clock className="w-4 h-4 text-[#C5A46D]" />
+                <span>Live Milestone Tracking</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Percent className="w-4 h-4 text-emerald-400" />
+                <span>Student Pricing</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-[#C5A46D]" />
+                <span>Verified Kitchens</span>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Popular Campus Categories */}
-      <section className="space-y-6">
-        <div className="flex items-end justify-between border-b border-gray-800/80 pb-4">
+      {/* 2. Swiggy-Level Horizontally Scrollable Category Section with Circular Photos */}
+      <section>
+        <CategoryScroller />
+      </section>
+
+      {/* 3. Promotional Campaign Banner Carousel */}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
           <div>
+            <span className="text-xs font-semibold uppercase tracking-wider text-[#C5A46D] block mb-0.5">
+              Special Campus Perks
+            </span>
             <h2 className="font-serif text-2xl sm:text-3xl font-bold text-white tracking-tight">
-              Curated Categories
+              Deals & Highlights
+            </h2>
+          </div>
+        </div>
+
+        <PromoCarousel />
+      </section>
+
+      {/* 4. Popular Dishes Shelf (What's Trending Now) */}
+      <section className="space-y-6">
+        <div className="flex items-end justify-between border-b border-[#1E2633] pb-4">
+          <div>
+            <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#C5A46D] uppercase tracking-wider mb-1">
+              <TrendingUp className="w-3.5 h-3.5" /> Popular Right Now
+            </div>
+            <h2 className="font-serif text-2xl sm:text-3xl font-bold text-white tracking-tight">
+              Trending Campus Dishes
             </h2>
             <p className="text-xs sm:text-sm text-gray-400 mt-1">
-              Explore chef-driven options across campus cafeterias and eateries
+              Most-ordered student favorites crafted fresh and ready for fast delivery
             </p>
           </div>
           <Link
             to="/restaurants"
             className="text-xs sm:text-sm font-semibold text-[#C5A46D] hover:underline flex items-center gap-1"
           >
-            <span>View All</span>
+            <span>Explore All</span>
             <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {CATEGORIES.map(({ name, icon: Icon, query }) => (
-            <div
-              key={name}
-              onClick={() => navigate(`/restaurants?search=${encodeURIComponent(query)}`)}
-              className="p-5 rounded-xl bg-[#171F2C] border border-gray-800/80 hover:border-[#C5A46D]/60 hover:shadow-lg hover:-translate-y-1 transition-all cursor-pointer group"
-            >
-              <div className="w-12 h-12 rounded-xl bg-[#C5A46D]/10 border border-[#C5A46D]/20 flex items-center justify-center text-[#C5A46D] mb-3 group-hover:scale-110 transition-transform">
-                <Icon className="w-6 h-6" />
-              </div>
-              <h3 className="font-semibold text-white text-sm sm:text-base">{name}</h3>
-              <p className="text-xs text-gray-400 mt-0.5">Explore dishes →</p>
-            </div>
-          ))}
-        </div>
+        {dishesLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {[1, 2, 3, 4].map((i) => (
+              <Card key={i} className="h-32 flex items-center gap-4">
+                <Skeleton className="w-24 h-24 rounded-xl shrink-0" />
+                <div className="space-y-2 flex-1">
+                  <Skeleton className="h-5 w-3/4" />
+                  <Skeleton className="h-4 w-1/2" />
+                </div>
+              </Card>
+            ))}
+          </div>
+        ) : popularDishes.length === 0 ? (
+          <Card className="text-center py-8">
+            <Utensils className="w-10 h-10 text-gray-600 mx-auto mb-2" />
+            <p className="text-sm text-gray-400">Loading campus menu items...</p>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {popularDishes.map((dish) => (
+              <DishCard key={dish.id} item={dish} restaurant={dish.restaurant} />
+            ))}
+          </div>
+        )}
       </section>
 
-      {/* Featured Campus Eateries */}
+      {/* 5. Featured Campus Restaurants Grid */}
       <section className="space-y-6">
-        <div className="flex items-end justify-between border-b border-gray-800/80 pb-4">
+        <div className="flex items-end justify-between border-b border-[#1E2633] pb-4">
           <div>
             <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#C5A46D] uppercase tracking-wider mb-1">
               <Award className="w-3.5 h-3.5" /> High Campus Ratings
             </div>
             <h2 className="font-serif text-2xl sm:text-3xl font-bold text-white tracking-tight">
-              Featured Eateries
+              Top Rated Campus Eateries
             </h2>
+            <p className="text-xs sm:text-sm text-gray-400 mt-1">
+              Verified dining spots with chef-driven culinary standards
+            </p>
           </div>
           <Link
             to="/restaurants"
@@ -200,155 +266,69 @@ export default function HomePage() {
         </div>
 
         {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {[1, 2, 3].map((i) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[1, 2, 3, 4].map((i) => (
               <Card key={i} className="space-y-3">
-                <Skeleton className="h-48 w-full" />
+                <Skeleton className="h-48 w-full rounded-xl" />
                 <Skeleton className="h-6 w-3/4" />
-                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-1/2" />
               </Card>
             ))}
           </div>
-        ) : restaurants.length === 0 ? (
-          <Card className="text-center py-12">
-            <Utensils className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-            <h3 className="text-base font-bold text-white">No active eateries yet</h3>
-            <p className="text-xs text-gray-400 mt-1">Check back shortly or register a restaurant.</p>
-          </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {restaurants.map((rest) => (
-              <Link key={rest.id} to={`/restaurants/${rest.id}`} className="group block">
-                <Card hover className="h-full flex flex-col justify-between overflow-hidden !p-0">
-                  <div>
-                    {/* Visual Photo */}
-                    <div className="h-48 bg-gray-800 relative overflow-hidden">
-                      {rest.image_url ? (
-                        <img
-                          src={rest.image_url}
-                          alt={rest.name}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-[#1A222E]">
-                          <Utensils className="w-12 h-12 text-gray-600" />
-                        </div>
-                      )}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
-
-                      {rest.cuisine_type && (
-                        <span className="absolute top-3 left-3 px-2.5 py-1 bg-[#111827]/85 backdrop-blur-sm text-xs font-medium text-[#C5A46D] border border-gray-750 rounded-full">
-                          {rest.cuisine_type}
-                        </span>
-                      )}
-
-                      <div className="absolute bottom-3 right-3 flex items-center gap-1 bg-[#111827]/90 px-2 py-0.5 rounded-md border border-gray-700/80 text-xs font-bold text-[#C5A46D]">
-                        <Star className="w-3.5 h-3.5 fill-current" />
-                        <span>{Number(rest.avg_rating || 0).toFixed(1)}</span>
-                      </div>
-                    </div>
-
-                    {/* Metadata */}
-                    <div className="p-5 space-y-2">
-                      <h3 className="font-serif text-lg font-bold text-white tracking-tight group-hover:text-[#C5A46D] transition-colors">
-                        {rest.name}
-                      </h3>
-                      <p className="text-xs text-gray-400 line-clamp-2 leading-relaxed">
-                        {rest.description || 'Artisanal dishes prepared daily for the campus community.'}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="p-5 pt-0">
-                    <div className="pt-3 border-t border-gray-800/80 flex items-center justify-between text-xs text-gray-400">
-                      <div className="flex items-center gap-1.5 truncate">
-                        <MapPin className="w-3.5 h-3.5 text-[#C5A46D] shrink-0" />
-                        <span className="truncate">{rest.address || 'Campus Center'}</span>
-                      </div>
-                      <span className="text-[#C5A46D] font-semibold shrink-0 group-hover:translate-x-0.5 transition-transform">
-                        Explore →
-                      </span>
-                    </div>
-                  </div>
-                </Card>
-              </Link>
+              <RestaurantCard key={rest.id} restaurant={rest} />
             ))}
           </div>
         )}
       </section>
 
-      {/* The CampusBite Standard / Why CampusBite */}
-      <section className="rounded-2xl bg-[#141B26] border border-gray-800 p-8 sm:p-12 relative overflow-hidden">
-        <div className="max-w-3xl space-y-4 mb-10">
+      {/* 6. Why CampusBite Experience Banner */}
+      <section className="p-8 sm:p-12 rounded-3xl bg-gradient-to-br from-[#171F2C] to-[#111827] border border-[#1E2633] shadow-xl space-y-8">
+        <div className="text-center max-w-2xl mx-auto space-y-2">
           <span className="text-xs font-semibold text-[#C5A46D] uppercase tracking-wider">
-            Engineered for Campus Life
+            Tailored For University Life
           </span>
-          <h2 className="font-serif text-3xl sm:text-4xl font-bold text-white tracking-tight">
-            Elevating campus dining into an effortless art.
+          <h2 className="font-serif text-2xl sm:text-4xl font-bold text-white tracking-tight">
+            Designed for Campus Convenience
           </h2>
-          <p className="text-sm text-gray-300 leading-relaxed">
-            From late-night study sessions in the library to quick lunch runs between lectures, CampusBite is designed to provide speed, visual clarity, and complete transparency.
+          <p className="text-xs sm:text-sm text-gray-400">
+            Never walk in the rain or skip meals during exam weeks again.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="p-5 rounded-xl bg-[#1A222E] border border-gray-800 space-y-3">
-            <div className="w-10 h-10 rounded-lg bg-[#C5A46D]/15 text-[#C5A46D] flex items-center justify-center font-bold">
-              1
+          <div className="p-5 rounded-2xl bg-[#111827] border border-[#1E2633] space-y-3">
+            <div className="w-10 h-10 rounded-xl bg-[#C5A46D]/15 border border-[#C5A46D]/30 flex items-center justify-center text-[#C5A46D]">
+              <Clock className="w-5 h-5" />
             </div>
-            <h3 className="font-bold text-white text-base">Direct Kitchen Tickets</h3>
+            <h3 className="font-bold text-white text-sm sm:text-base">15-Minute Dorm Delivery</h3>
             <p className="text-xs text-gray-400 leading-relaxed">
-              Orders bypass external aggregators and dispatch directly to university kitchen displays with real-time cooking status.
+              Student couriers stationed across campus quads pick up directly from kitchens for lightning-fast arrival.
             </p>
           </div>
 
-          <div className="p-5 rounded-xl bg-[#1A222E] border border-gray-800 space-y-3">
-            <div className="w-10 h-10 rounded-lg bg-teal-500/15 text-teal-400 flex items-center justify-center font-bold">
-              2
+          <div className="p-5 rounded-2xl bg-[#111827] border border-[#1E2633] space-y-3">
+            <div className="w-10 h-10 rounded-xl bg-[#248A62]/15 border border-[#248A62]/30 flex items-center justify-center text-[#248A62]">
+              <ShieldCheck className="w-5 h-5" />
             </div>
-            <h3 className="font-bold text-white text-base">Student Courier Network</h3>
+            <h3 className="font-bold text-white text-sm sm:text-base">Verified Health & Taste</h3>
             <p className="text-xs text-gray-400 leading-relaxed">
-              Trained campus couriers pick up orders directly when marked READY and deliver them straight to your residential hall door.
+              Every dining partner undergoes university quality reviews with transparent student feedback and ratings.
             </p>
           </div>
 
-          <div className="p-5 rounded-xl bg-[#1A222E] border border-gray-800 space-y-3">
-            <div className="w-10 h-10 rounded-lg bg-purple-500/15 text-purple-400 flex items-center justify-center font-bold">
-              3
+          <div className="p-5 rounded-2xl bg-[#111827] border border-[#1E2633] space-y-3">
+            <div className="w-10 h-10 rounded-xl bg-orange-500/15 border border-orange-500/30 flex items-center justify-center text-orange-400">
+              <Sparkles className="w-5 h-5" />
             </div>
-            <h3 className="font-bold text-white text-base">AI Order Intelligence</h3>
+            <h3 className="font-bold text-white text-sm sm:text-base">AI Order Insights</h3>
             <p className="text-xs text-gray-400 leading-relaxed">
-              Ask natural questions to analyze your meal history, summarize spending, or recall your favorite dishes using OpenAI.
+              Ask AI about dietary nutrition, discover chef recommendations, and track spending trends in your dashboard.
             </p>
           </div>
         </div>
-      </section>
-
-      {/* AI Assistant Banner */}
-      <section>
-        <Card className="bg-gradient-to-r from-[#171F2C] via-[#1A222E] to-[#171F2C] border border-[#C5A46D]/40 p-8 sm:p-10 relative overflow-hidden">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div className="space-y-2 max-w-xl">
-              <div className="inline-flex items-center gap-1.5 text-xs font-bold text-[#C5A46D] uppercase tracking-wider">
-                <Sparkles className="w-4 h-4" /> Server-Side AI Intelligence
-              </div>
-              <h3 className="font-serif text-2xl sm:text-3xl font-bold text-white">
-                Discover your dining habits with CampusBite AI
-              </h3>
-              <p className="text-xs sm:text-sm text-gray-300 leading-relaxed">
-                "What did I spend on burgers this week?", "Summarize my last five orders", or "Which restaurant do I order from most frequently?"
-              </p>
-            </div>
-
-            <div className="shrink-0">
-              <Link to="/insights">
-                <Button variant="primary" size="lg" className="shadow-lg shadow-[#C5A46D]/20">
-                  Launch AI Assistant <Sparkles className="w-4 h-4 ml-2" />
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </Card>
       </section>
     </div>
   );

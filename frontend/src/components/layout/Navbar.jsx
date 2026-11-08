@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
   UtensilsCrossed,
@@ -15,48 +15,61 @@ import {
   Truck,
   RefreshCcw,
   Bell,
-  UserCheck,
+  MapPin,
+  Search,
+  Tag,
+  HelpCircle,
+  User as UserIcon,
+  ShieldCheck,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
-
-const CUSTOMER_LINKS = [
-  { to: '/restaurants', label: 'Restaurants', icon: Store },
-  { to: '/orders', label: 'Orders', icon: ClipboardList },
-  { to: '/insights', label: 'AI Insights', icon: Sparkles },
-];
-
-const OWNER_LINKS = [
-  { to: '/owner/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/owner/menu', label: 'Menu', icon: BookOpen },
-  { to: '/owner/orders', label: 'Orders', icon: ClipboardList },
-  { to: '/owner/deliveries', label: 'Deliveries', icon: Truck },
-  { to: '/owner/refunds', label: 'Refunds', icon: RefreshCcw },
-  { to: '/owner/reminders', label: 'Reminders', icon: Bell },
-];
-
-const DELIVERY_LINKS = [
-  { to: '/delivery/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/delivery/orders', label: 'My Deliveries', icon: Truck },
-];
-
-function getLinks(role) {
-  const r = role?.toLowerCase();
-  if (r === 'owner') return OWNER_LINKS;
-  if (r === 'delivery') return DELIVERY_LINKS;
-  return CUSTOMER_LINKS;
-}
+import LocationModal from '../customer/LocationModal';
+import OffersModal from '../customer/OffersModal';
+import HelpModal from '../customer/HelpModal';
 
 export default function Navbar() {
   const { user, logout } = useAuth();
   const cart = useCart();
   const navigate = useNavigate();
   const location = useLocation();
+
   const [mobileOpen, setMobileOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [navSearch, setNavSearch] = useState('');
+
+  // Modals
+  const [locationModalOpen, setLocationModalOpen] = useState(false);
+  const [offersModalOpen, setOffersModalOpen] = useState(false);
+  const [helpModalOpen, setHelpModalOpen] = useState(false);
+
+  // Selected delivery location
+  const [deliveryLocation, setDeliveryLocation] = useState(
+    () => localStorage.getItem('campusbite_location') || user?.address || 'North Quad Dorm, Hall C'
+  );
+
+  useEffect(() => {
+    if (user?.address && !localStorage.getItem('campusbite_location')) {
+      setDeliveryLocation(user.address);
+    }
+  }, [user]);
+
+  const handleUpdateLocation = (newLoc) => {
+    setDeliveryLocation(newLoc);
+    localStorage.setItem('campusbite_location', newLoc);
+  };
+
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    if (navSearch.trim()) {
+      navigate(`/restaurants?search=${encodeURIComponent(navSearch.trim())}`);
+      setNavSearch('');
+      setMobileOpen(false);
+    }
+  };
 
   const cartCount = cart?.items?.reduce((sum, i) => sum + i.quantity, 0) || 0;
-  const links = user ? getLinks(user.role) : [{ to: '/restaurants', label: 'Restaurants', icon: Store }];
+  const cartTotal = cart?.total || 0;
 
   const handleLogout = () => {
     logout();
@@ -65,217 +78,409 @@ export default function Navbar() {
     navigate('/login');
   };
 
-  const roleLabel =
-    user?.role?.toLowerCase() === 'owner'
-      ? 'Restaurant Owner'
-      : user?.role?.toLowerCase() === 'delivery'
-      ? 'Courier'
-      : 'Student / Customer';
+  const isOwner = user?.role?.toLowerCase() === 'owner';
+  const isCourier = user?.role?.toLowerCase() === 'delivery';
+  const isCustomer = !user || (!isOwner && !isCourier);
 
   return (
-    <nav className="bg-[#111827]/90 backdrop-blur-md border-b border-gray-800/80 sticky top-0 z-40 transition-colors">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          {/* Brand */}
-          <Link to="/" className="flex items-center gap-2.5 group">
-            <div className="w-9 h-9 rounded-xl bg-[#C5A46D]/15 border border-[#C5A46D]/30 flex items-center justify-center text-[#C5A46D] group-hover:scale-105 transition-transform">
-              <UtensilsCrossed className="w-5 h-5" />
+    <>
+      <nav className="bg-[#111827]/95 backdrop-blur-md border-b border-[#1E2633] sticky top-0 z-40 transition-colors shadow-lg shadow-black/20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16 gap-3">
+            {/* Left: Brand + Delivery Location Selector */}
+            <div className="flex items-center gap-4 lg:gap-6 shrink-0">
+              <Link to="/" className="flex items-center gap-2.5 group shrink-0">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#C5A46D] to-[#9E7D47] flex items-center justify-center text-[#111827] group-hover:scale-105 transition-transform shadow-md shadow-[#C5A46D]/20">
+                  <UtensilsCrossed className="w-5 h-5 font-bold" />
+                </div>
+                <span className="font-serif text-xl sm:text-2xl font-bold tracking-tight text-white">
+                  campus<span className="text-[#C5A46D]">bite</span>
+                </span>
+              </Link>
+
+              {/* Delivery Location Pill (Swiggy-style) */}
+              {isCustomer && (
+                <button
+                  type="button"
+                  onClick={() => setLocationModalOpen(true)}
+                  className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#171F2C] border border-[#1E2633] hover:border-[#C5A46D]/60 text-left transition-all group cursor-pointer max-w-[220px] lg:max-w-[280px]"
+                >
+                  <MapPin className="w-3.5 h-3.5 text-[#C5A46D] shrink-0" />
+                  <div className="truncate text-xs">
+                    <span className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider block leading-none">
+                      Deliver to
+                    </span>
+                    <span className="text-white font-medium truncate block mt-0.5">
+                      {deliveryLocation.split(',')[0]}
+                    </span>
+                  </div>
+                  <ChevronDown className="w-3 h-3 text-gray-400 group-hover:text-white shrink-0 ml-auto" />
+                </button>
+              )}
             </div>
-            <span className="text-xl font-bold tracking-tight text-white">
-              campus<span className="text-[#C5A46D]">bite</span>
-            </span>
-          </Link>
 
-          {/* Desktop nav links */}
-          <div className="hidden md:flex items-center gap-1 lg:gap-2">
-            {links.map(({ to, label, icon: Icon }) => {
-              const active = location.pathname === to || (to !== '/' && location.pathname.startsWith(to));
-              return (
-                <Link
-                  key={to}
-                  to={to}
-                  className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs lg:text-sm font-medium transition-all ${
-                    active
-                      ? 'text-white bg-[#202631] shadow-inner border border-gray-750'
-                      : 'text-gray-400 hover:text-white hover:bg-gray-800/60'
-                  }`}
-                >
-                  <Icon className={`w-4 h-4 ${active ? 'text-[#C5A46D]' : 'text-gray-500'}`} />
-                  {label}
-                </Link>
-              );
-            })}
-          </div>
+            {/* Middle: Global Search Input (Swiggy-style) */}
+            {isCustomer && (
+              <form
+                onSubmit={handleSearchSubmit}
+                className="hidden lg:flex items-center flex-1 max-w-xs xl:max-w-md relative mx-2"
+              >
+                <Search className="w-4 h-4 text-gray-400 absolute left-3 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Search for restaurants, biryani, pizza..."
+                  value={navSearch}
+                  onChange={(e) => setNavSearch(e.target.value)}
+                  className="w-full bg-[#171F2C] border border-[#1E2633] focus:border-[#C5A46D] focus:ring-1 focus:ring-[#C5A46D]/30 rounded-full pl-9 pr-4 py-1.5 text-xs text-white placeholder-gray-400 outline-none transition-all"
+                />
+              </form>
+            )}
 
-          {/* Desktop right side */}
-          <div className="hidden md:flex items-center gap-3">
-            {!user ? (
-              <div className="flex items-center gap-2">
-                <Link
-                  to="/login"
-                  className="px-4 py-2 text-xs lg:text-sm font-medium text-gray-300 hover:text-white transition-colors"
-                >
-                  Sign In
-                </Link>
-                <Link
-                  to="/register"
-                  className="px-4 py-2 text-xs lg:text-sm font-semibold bg-[#C5A46D] hover:bg-[#b8955a] text-gray-950 rounded-lg shadow-sm shadow-[#C5A46D]/15 transition-all active:scale-[0.98]"
-                >
-                  Create Account
-                </Link>
-              </div>
-            ) : (
-              <div className="flex items-center gap-3">
-                {/* Cart — customers or public */}
-                {(!user || user.role?.toLowerCase() === 'customer') && (
+            {/* Right: Actions (Restaurants, Offers, Help, Cart, Profile) */}
+            <div className="hidden md:flex items-center gap-1.5 lg:gap-3">
+              {isCustomer && (
+                <>
                   <Link
-                    to="/cart"
-                    className="relative p-2.5 rounded-lg text-gray-300 hover:text-white hover:bg-[#202631] border border-transparent hover:border-gray-750 transition-all"
-                    aria-label="View shopping cart"
+                    to="/restaurants"
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                      location.pathname.startsWith('/restaurants')
+                        ? 'text-white bg-[#1E2633]'
+                        : 'text-gray-300 hover:text-white hover:bg-gray-800/60'
+                    }`}
                   >
-                    <ShoppingCart className="w-5 h-5" />
-                    {cartCount > 0 && (
-                      <span className="absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center text-[10px] font-bold bg-[#C5A46D] text-gray-950 rounded-full shadow">
-                        {cartCount > 9 ? '9+' : cartCount}
-                      </span>
-                    )}
+                    <Store className="w-4 h-4 text-[#C5A46D]" />
+                    <span>Restaurants</span>
                   </Link>
-                )}
 
-                {/* User dropdown */}
-                <div className="relative">
                   <button
-                    onClick={() => setDropdownOpen(!dropdownOpen)}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs lg:text-sm text-gray-200 hover:text-white bg-[#1A222E] border border-gray-750/80 hover:border-gray-650 transition-all cursor-pointer"
+                    type="button"
+                    onClick={() => setOffersModalOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-300 hover:text-white hover:bg-gray-800/60 transition-all cursor-pointer"
                   >
-                    <div className="w-7 h-7 rounded-lg bg-[#C5A46D]/15 text-[#C5A46D] font-bold text-xs flex items-center justify-center border border-[#C5A46D]/30">
-                      {(user.full_name || user.email || 'U').charAt(0).toUpperCase()}
-                    </div>
-                    <div className="text-left max-w-[110px] truncate">
-                      <p className="font-semibold text-white leading-tight truncate">
-                        {user.full_name || user.email}
-                      </p>
-                      <p className="text-[10px] text-[#C5A46D] leading-tight capitalize">
-                        {user.role}
-                      </p>
-                    </div>
-                    <ChevronDown
-                      className={`w-3.5 h-3.5 text-gray-400 transition-transform ${
-                        dropdownOpen ? 'rotate-180' : ''
-                      }`}
-                    />
+                    <Tag className="w-4 h-4 text-orange-400" />
+                    <span>Offers</span>
                   </button>
 
-                  {dropdownOpen && (
-                    <>
-                      <div className="fixed inset-0 z-10" onClick={() => setDropdownOpen(false)} />
-                      <div className="absolute right-0 mt-2 w-56 bg-[#18212D] border border-gray-750 rounded-xl shadow-2xl shadow-black/60 z-20 py-2 divide-y divide-gray-750">
-                        <div className="px-4 py-2.5">
-                          <p className="text-xs font-semibold text-white truncate">
-                            {user.full_name || 'Campus User'}
-                          </p>
-                          <p className="text-[11px] text-gray-400 truncate">{user.email}</p>
-                          <span className="mt-1.5 inline-block text-[10px] px-2 py-0.5 rounded bg-[#C5A46D]/15 text-[#C5A46D] border border-[#C5A46D]/30 font-medium">
-                            {roleLabel}
-                          </span>
-                        </div>
+                  <button
+                    type="button"
+                    onClick={() => setHelpModalOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-300 hover:text-white hover:bg-gray-800/60 transition-all cursor-pointer"
+                  >
+                    <HelpCircle className="w-4 h-4 text-cyan-400" />
+                    <span>Help</span>
+                  </button>
+                </>
+              )}
 
-                        <div className="py-1">
-                          <button
-                            onClick={handleLogout}
-                            className="w-full flex items-center gap-2.5 px-4 py-2 text-xs text-[#C94F50] hover:bg-gray-800 transition-colors cursor-pointer text-left font-medium"
-                          >
-                            <LogOut className="w-4 h-4" />
-                            Sign Out
-                          </button>
-                        </div>
+              {/* Owner navigation shortcuts */}
+              {isOwner && (
+                <>
+                  <Link
+                    to="/owner/dashboard"
+                    className="text-xs font-semibold px-3 py-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-gray-800/60"
+                  >
+                    Dashboard
+                  </Link>
+                  <Link
+                    to="/owner/menu"
+                    className="text-xs font-semibold px-3 py-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-gray-800/60"
+                  >
+                    Menu
+                  </Link>
+                  <Link
+                    to="/owner/orders"
+                    className="text-xs font-semibold px-3 py-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-gray-800/60"
+                  >
+                    Kitchen Orders
+                  </Link>
+                </>
+              )}
+
+              {/* Courier navigation shortcuts */}
+              {isCourier && (
+                <>
+                  <Link
+                    to="/delivery/dashboard"
+                    className="text-xs font-semibold px-3 py-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-gray-800/60"
+                  >
+                    Courier Hub
+                  </Link>
+                  <Link
+                    to="/delivery/history"
+                    className="text-xs font-semibold px-3 py-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-gray-800/60"
+                  >
+                    Trip History
+                  </Link>
+                </>
+              )}
+
+              {/* Cart Button (Always visible for Customers) */}
+              {isCustomer && (
+                <Link
+                  to="/cart"
+                  className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl border font-bold text-xs transition-all ${
+                    cartCount > 0
+                      ? 'bg-[#C5A46D] text-gray-950 border-[#C5A46D] shadow-md shadow-[#C5A46D]/20 hover:bg-[#b5935b]'
+                      : 'bg-[#171F2C] text-gray-300 border-[#1E2633] hover:border-gray-700 hover:text-white'
+                  }`}
+                >
+                  <div className="relative">
+                    <ShoppingCart className="w-4 h-4" />
+                    {cartCount > 0 && (
+                      <span className="absolute -top-1.5 -right-2 bg-gray-950 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                        {cartCount}
+                      </span>
+                    )}
+                  </div>
+                  <span>Cart</span>
+                  {cartCount > 0 && (
+                    <span className="font-mono text-[11px] ml-0.5">
+                      ${Number(cartTotal).toFixed(2)}
+                    </span>
+                  )}
+                </Link>
+              )}
+
+              {/* User Account / Profile */}
+              {user ? (
+                <div className="relative ml-1">
+                  <button
+                    onClick={() => setDropdownOpen(!dropdownOpen)}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#171F2C] border border-[#1E2633] hover:border-[#C5A46D]/50 text-xs text-white transition-all cursor-pointer"
+                  >
+                    <div className="w-6 h-6 rounded-full bg-[#C5A46D]/20 text-[#C5A46D] font-bold flex items-center justify-center text-[10px]">
+                      {user.full_name?.charAt(0)?.toUpperCase() || 'U'}
+                    </div>
+                    <span className="font-medium max-w-[90px] truncate">{user.full_name}</span>
+                    <ChevronDown className="w-3 h-3 text-gray-400" />
+                  </button>
+
+                  {/* Dropdown Menu */}
+                  {dropdownOpen && (
+                    <div className="absolute right-0 mt-2 w-56 rounded-xl bg-[#171F2C] border border-[#1E2633] shadow-2xl py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                      <div className="px-4 py-2 border-b border-[#1E2633]">
+                        <p className="text-xs font-bold text-white truncate">{user.full_name}</p>
+                        <p className="text-[11px] text-gray-400 truncate">{user.email}</p>
+                        <span className="inline-block mt-1 px-2 py-0.5 rounded bg-[#C5A46D]/15 text-[#C5A46D] text-[10px] font-semibold uppercase">
+                          {user.role}
+                        </span>
                       </div>
-                    </>
+
+                      {isCustomer && (
+                        <>
+                          <Link
+                            to="/orders"
+                            onClick={() => setDropdownOpen(false)}
+                            className="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:text-white hover:bg-gray-800/60"
+                          >
+                            <ClipboardList className="w-3.5 h-3.5 text-[#C5A46D]" />
+                            <span>My Orders</span>
+                          </Link>
+                          <Link
+                            to="/insights"
+                            onClick={() => setDropdownOpen(false)}
+                            className="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:text-white hover:bg-gray-800/60"
+                          >
+                            <Sparkles className="w-3.5 h-3.5 text-[#C5A46D]" />
+                            <span>AI Order Insights</span>
+                          </Link>
+                        </>
+                      )}
+
+                      {isOwner && (
+                        <>
+                          <Link
+                            to="/owner/deliveries"
+                            onClick={() => setDropdownOpen(false)}
+                            className="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:text-white hover:bg-gray-800/60"
+                          >
+                            <Truck className="w-3.5 h-3.5 text-[#C5A46D]" />
+                            <span>Dispatch Couriers</span>
+                          </Link>
+                          <Link
+                            to="/owner/refunds"
+                            onClick={() => setDropdownOpen(false)}
+                            className="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:text-white hover:bg-gray-800/60"
+                          >
+                            <RefreshCcw className="w-3.5 h-3.5 text-[#C5A46D]" />
+                            <span>Refund Disputes</span>
+                          </Link>
+                          <Link
+                            to="/owner/reminders"
+                            onClick={() => setDropdownOpen(false)}
+                            className="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:text-white hover:bg-gray-800/60"
+                          >
+                            <Bell className="w-3.5 h-3.5 text-[#C5A46D]" />
+                            <span>Kitchen Reminders</span>
+                          </Link>
+                        </>
+                      )}
+
+                      <div className="pt-1 mt-1 border-t border-[#1E2633]">
+                        <button
+                          type="button"
+                          onClick={handleLogout}
+                          className="w-full flex items-center gap-2 px-4 py-2 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 cursor-pointer"
+                        >
+                          <LogOut className="w-3.5 h-3.5" />
+                          <span>Sign Out</span>
+                        </button>
+                      </div>
+                    </div>
                   )}
                 </div>
-              </div>
-            )}
-          </div>
-
-          {/* Mobile hamburger */}
-          <button
-            onClick={() => setMobileOpen(!mobileOpen)}
-            className="md:hidden p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
-          >
-            {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-          </button>
-        </div>
-      </div>
-
-      {/* Mobile drawer */}
-      {mobileOpen && (
-        <div className="md:hidden border-t border-gray-800 bg-[#111827] px-4 py-4 space-y-2">
-          {links.map(({ to, label, icon: Icon }) => (
-            <Link
-              key={to}
-              to={to}
-              onClick={() => setMobileOpen(false)}
-              className="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm text-gray-300 hover:text-white hover:bg-gray-800"
-            >
-              <Icon className="w-4 h-4 text-[#C5A46D]" />
-              {label}
-            </Link>
-          ))}
-
-          {(!user || user.role?.toLowerCase() === 'customer') && (
-            <Link
-              to="/cart"
-              onClick={() => setMobileOpen(false)}
-              className="flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm text-gray-300 hover:text-white hover:bg-gray-800"
-            >
-              <div className="flex items-center gap-3">
-                <ShoppingCart className="w-4 h-4 text-[#C5A46D]" />
-                Cart
-              </div>
-              {cartCount > 0 && (
-                <span className="px-2 py-0.5 text-xs font-bold bg-[#C5A46D] text-gray-950 rounded-full">
-                  {cartCount}
-                </span>
-              )}
-            </Link>
-          )}
-
-          <div className="pt-3 border-t border-gray-800">
-            {!user ? (
-              <div className="grid grid-cols-2 gap-2">
+              ) : (
                 <Link
                   to="/login"
-                  onClick={() => setMobileOpen(false)}
-                  className="px-3 py-2 text-center text-sm rounded-lg bg-gray-800 text-white font-medium"
+                  className="px-3.5 py-1.5 rounded-xl bg-[#171F2C] border border-[#1E2633] hover:border-[#C5A46D] text-xs font-bold text-white transition-all"
                 >
                   Sign In
                 </Link>
+              )}
+            </div>
+
+            {/* Mobile Actions: Cart + Hamburger */}
+            <div className="flex md:hidden items-center gap-2">
+              {isCustomer && (
                 <Link
-                  to="/register"
-                  onClick={() => setMobileOpen(false)}
-                  className="px-3 py-2 text-center text-sm rounded-lg bg-[#C5A46D] text-gray-950 font-semibold"
+                  to="/cart"
+                  className="p-2 rounded-lg bg-[#171F2C] border border-[#1E2633] text-white relative"
                 >
-                  Register
+                  <ShoppingCart className="w-4 h-4" />
+                  {cartCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-[#C5A46D] text-gray-950 text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                      {cartCount}
+                    </span>
+                  )}
                 </Link>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <div className="px-3 py-1">
-                  <p className="text-xs font-bold text-white">{user.full_name}</p>
-                  <p className="text-[11px] text-gray-400">{user.email}</p>
-                </div>
-                <button
-                  onClick={handleLogout}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[#C94F50] rounded-lg hover:bg-gray-800"
-                >
-                  <LogOut className="w-4 h-4" />
-                  Sign Out
-                </button>
-              </div>
-            )}
+              )}
+
+              <button
+                type="button"
+                onClick={() => setMobileOpen(!mobileOpen)}
+                className="p-2 rounded-lg bg-[#171F2C] border border-[#1E2633] text-gray-300 hover:text-white"
+              >
+                {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              </button>
+            </div>
           </div>
         </div>
-      )}
-    </nav>
+
+        {/* Mobile Slide-Down Drawer */}
+        {mobileOpen && (
+          <div className="md:hidden border-t border-[#1E2633] bg-[#111827] px-4 py-4 space-y-4">
+            {/* Location selector mobile */}
+            {isCustomer && (
+              <button
+                type="button"
+                onClick={() => {
+                  setLocationModalOpen(true);
+                  setMobileOpen(false);
+                }}
+                className="w-full p-2.5 rounded-xl bg-[#171F2C] border border-[#1E2633] flex items-center gap-2 text-xs text-left"
+              >
+                <MapPin className="w-4 h-4 text-[#C5A46D] shrink-0" />
+                <div className="truncate flex-1">
+                  <span className="text-[10px] text-gray-400 block">Deliver to:</span>
+                  <span className="text-white font-semibold truncate block">
+                    {deliveryLocation}
+                  </span>
+                </div>
+                <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+              </button>
+            )}
+
+            {/* Mobile Search */}
+            {isCustomer && (
+              <form onSubmit={handleSearchSubmit} className="relative">
+                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Search restaurants or dishes..."
+                  value={navSearch}
+                  onChange={(e) => setNavSearch(e.target.value)}
+                  className="w-full bg-[#171F2C] border border-[#1E2633] focus:border-[#C5A46D] rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder-gray-400 outline-none"
+                />
+              </form>
+            )}
+
+            {/* Nav Links */}
+            <div className="space-y-1 pt-2 border-t border-[#1E2633]">
+              {isCustomer && (
+                <>
+                  <Link
+                    to="/restaurants"
+                    onClick={() => setMobileOpen(false)}
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-300 hover:text-white hover:bg-gray-800"
+                  >
+                    <Store className="w-4 h-4 text-[#C5A46D]" />
+                    <span>Browse Restaurants</span>
+                  </Link>
+                  <Link
+                    to="/orders"
+                    onClick={() => setMobileOpen(false)}
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-300 hover:text-white hover:bg-gray-800"
+                  >
+                    <ClipboardList className="w-4 h-4 text-[#C5A46D]" />
+                    <span>Order History</span>
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOffersModalOpen(true);
+                      setMobileOpen(false);
+                    }}
+                    className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-300 hover:text-white hover:bg-gray-800 text-left"
+                  >
+                    <Tag className="w-4 h-4 text-orange-400" />
+                    <span>Active Offers</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setHelpModalOpen(true);
+                      setMobileOpen(false);
+                    }}
+                    className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-300 hover:text-white hover:bg-gray-800 text-left"
+                  >
+                    <HelpCircle className="w-4 h-4 text-cyan-400" />
+                    <span>Help & FAQs</span>
+                  </button>
+                </>
+              )}
+
+              {user ? (
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-red-400 hover:bg-red-500/10 text-left pt-3 mt-2 border-t border-[#1E2633]"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Sign Out ({user.full_name})</span>
+                </button>
+              ) : (
+                <Link
+                  to="/login"
+                  onClick={() => setMobileOpen(false)}
+                  className="block text-center w-full py-2.5 rounded-xl bg-[#C5A46D] text-gray-950 font-bold text-xs"
+                >
+                  Sign In
+                </Link>
+              )}
+            </div>
+          </div>
+        )}
+      </nav>
+
+      {/* Global Modals */}
+      <LocationModal
+        isOpen={locationModalOpen}
+        onClose={() => setLocationModalOpen(false)}
+        currentLocation={deliveryLocation}
+        onSelectLocation={handleUpdateLocation}
+      />
+      <OffersModal isOpen={offersModalOpen} onClose={() => setOffersModalOpen(false)} />
+      <HelpModal isOpen={helpModalOpen} onClose={() => setHelpModalOpen(false)} />
+    </>
   );
 }

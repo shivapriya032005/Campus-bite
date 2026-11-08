@@ -8,6 +8,8 @@ import Button from '../../components/common/Button';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import EmptyState from '../../components/common/EmptyState';
 import Skeleton from '../../components/common/Skeleton';
+import SafeImage from '../../components/common/SafeImage';
+import { getDishImage } from '../../utils/imageRegistry';
 
 const STATUS_FILTERS = [
   { label: 'All Orders', value: '' },
@@ -119,42 +121,58 @@ export default function OrdersPage() {
         />
       ) : (
         <div className="space-y-4">
-          {orders.map((o) => (
-            <Link key={o.id} to={`/orders/${o.id}`} className="block group">
-              <Card hover className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-3">
-                    <span className="font-serif text-lg font-bold text-white group-hover:text-[#C5A46D] transition-colors">
-                      Order #{o.id}
-                    </span>
-                    <Badge status={o.status}>{o.status.replace(/_/g, ' ')}</Badge>
+          {orders.map((o) => {
+            const firstItem = o.items?.[0];
+            const firstItemImage = firstItem ? getDishImage({ name: firstItem.item_name }) : null;
+            return (
+              <Link key={o.id} to={`/orders/${o.id}`} className="block group">
+                <Card hover className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    {firstItemImage && (
+                      <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 bg-gray-900 border border-[#1E2633]">
+                        <SafeImage
+                          src={firstItemImage}
+                          alt={firstItem?.item_name || 'Dish'}
+                          aspectRatio="aspect-square"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    )}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-3">
+                        <span className="font-serif text-lg font-bold text-white group-hover:text-[#C5A46D] transition-colors">
+                          Order #{o.id}
+                        </span>
+                        <Badge status={o.status}>{o.status.replace(/_/g, ' ')}</Badge>
+                      </div>
+
+                      <div className="flex items-center gap-2 text-xs text-gray-400">
+                        <Clock className="w-3.5 h-3.5 text-gray-500 shrink-0" />
+                        <span>Placed on {new Date(o.created_at).toLocaleString()}</span>
+                      </div>
+
+                      <p className="text-xs text-gray-300">
+                        <span className="text-gray-500 font-semibold mr-1">Dishes:</span>
+                        {o.items?.map((it) => `${it.quantity}x ${it.item_name}`).join(', ') || 'No items listed'}
+                      </p>
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-2 text-xs text-gray-400">
-                    <Clock className="w-3.5 h-3.5 text-gray-500 shrink-0" />
-                    <span>Placed on {new Date(o.created_at).toLocaleString()}</span>
+                  <div className="flex items-center justify-between sm:justify-end gap-5 pt-3 sm:pt-0 border-t sm:border-t-0 border-gray-800">
+                    <div className="text-right">
+                      <span className="text-[11px] text-gray-400 uppercase tracking-wider block">Total</span>
+                      <span className="font-serif text-lg font-bold text-[#C5A46D]">
+                        ${Number(o.total_amount).toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="w-8 h-8 rounded-lg bg-[#1A222E] border border-gray-750 flex items-center justify-center text-gray-400 group-hover:text-white group-hover:border-[#C5A46D] transition-all shrink-0">
+                      <ArrowRight className="w-4 h-4" />
+                    </div>
                   </div>
-
-                  <p className="text-xs text-gray-300">
-                    <span className="text-gray-500 font-semibold mr-1">Dishes:</span>
-                    {o.items?.map((it) => `${it.quantity}x ${it.item_name}`).join(', ') || 'No items listed'}
-                  </p>
-                </div>
-
-                <div className="flex items-center justify-between sm:justify-end gap-5 pt-3 sm:pt-0 border-t sm:border-t-0 border-gray-800">
-                  <div className="text-right">
-                    <span className="text-[11px] text-gray-400 uppercase tracking-wider block">Total</span>
-                    <span className="font-serif text-lg font-bold text-[#C5A46D]">
-                      ${Number(o.total_amount).toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="w-8 h-8 rounded-lg bg-[#1A222E] border border-gray-750 flex items-center justify-center text-gray-400 group-hover:text-white group-hover:border-[#C5A46D] transition-all shrink-0">
-                    <ArrowRight className="w-4 h-4" />
-                  </div>
-                </div>
-              </Card>
-            </Link>
-          ))}
+                </Card>
+              </Link>
+            );
+          })}
         </div>
       )}
 

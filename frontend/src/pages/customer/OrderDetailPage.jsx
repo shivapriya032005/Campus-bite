@@ -21,6 +21,8 @@ import Button from '../../components/common/Button';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import Modal from '../../components/common/Modal';
 import Skeleton from '../../components/common/Skeleton';
+import SafeImage from '../../components/common/SafeImage';
+import { getDishImage } from '../../utils/imageRegistry';
 
 const LIFECYCLE_STEPS = [
   'PLACED',
@@ -324,13 +326,23 @@ export default function OrderDetailPage() {
             <div className="divide-y divide-gray-800/80">
               {order.items?.map((item) => (
                 <div key={item.id} className="p-4 sm:p-5 flex items-center justify-between text-xs sm:text-sm">
-                  <div>
-                    <h3 className="font-serif font-bold text-white">{item.item_name}</h3>
-                    <p className="text-gray-400 text-xs mt-0.5">
-                      ${Number(item.unit_price).toFixed(2)} × {item.quantity}
-                    </p>
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0 bg-gray-900 border border-gray-800">
+                      <SafeImage
+                        src={getDishImage({ name: item.item_name })}
+                        alt={item.item_name}
+                        aspectRatio="aspect-square"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <div>
+                      <h3 className="font-serif font-bold text-white">{item.item_name}</h3>
+                      <p className="text-gray-400 text-xs mt-0.5">
+                        ${Number(item.unit_price).toFixed(2)} × {item.quantity}
+                      </p>
+                    </div>
                   </div>
-                  <span className="font-bold text-white">
+                  <span className="font-bold text-white font-mono">
                     ${Number(item.subtotal).toFixed(2)}
                   </span>
                 </div>

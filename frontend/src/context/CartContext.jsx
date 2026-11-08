@@ -30,6 +30,8 @@ export function CartProvider({ children }) {
         menu_item_id: item.id,
         name: item.name,
         price: parseFloat(item.price),
+        image_url: item.image_url || null,
+        category: item.category || null,
         quantity: 1,
       }]
     })
