@@ -95,3 +95,4 @@ def test_menu_item_crud_and_availability(client, db_session, auth_headers):
     # 6. Delete item
     del_res = client.delete(f"/api/v1/menu-items/{item_id}", headers=headers)
     assert del_res.status_code == 204
+

@@ -90,3 +90,4 @@ def test_ai_insights_unconfigured_api_key(client, db_session, auth_headers):
         )
         assert res.status_code == 503
         assert "OPENAI_API_KEY" in res.json()["detail"]
+

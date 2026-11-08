@@ -97,3 +97,4 @@ def test_role_authorization_restriction(client, db_session, auth_headers):
     response = client.get("/api/v1/dashboard/stats", headers=headers)
     assert response.status_code == 403
     assert "permission" in response.json()["detail"].lower()
+

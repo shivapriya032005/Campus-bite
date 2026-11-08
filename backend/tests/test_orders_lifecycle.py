@@ -179,3 +179,4 @@ def test_customer_cancellation_rules(client, db_session, auth_headers):
     cancel_fail = client.post(f"/api/v1/orders/my/{order2_id}/cancel", headers=cust_headers)
     assert cancel_fail.status_code == 400
     assert "cannot cancel" in cancel_fail.json()["detail"].lower()
+
