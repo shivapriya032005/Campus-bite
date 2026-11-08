@@ -3,15 +3,20 @@ export default function Card({
   className = '',
   hover = false,
   noPadding = false,
+  onClick,
+  ...rest
 }) {
   return (
     <div
+      onClick={onClick}
       className={`
-        bg-gray-800/50 border border-gray-700/50 rounded-xl
-        ${noPadding ? '' : 'p-6'}
-        ${hover ? 'transition-all duration-200 hover:bg-gray-800/80 hover:border-gray-600/50 hover:shadow-lg' : ''}
+        bg-[#171F2C] border border-gray-800/90 rounded-xl shadow-sm shadow-black/25
+        ${noPadding ? '' : 'p-5 sm:p-6'}
+        ${hover ? 'transition-all duration-200 hover:border-gray-700 hover:shadow-md hover:shadow-black/40 hover:-translate-y-0.5' : ''}
+        ${onClick ? 'cursor-pointer' : ''}
         ${className}
       `}
+      {...rest}
     >
       {children}
     </div>

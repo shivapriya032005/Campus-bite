@@ -1,49 +1,60 @@
 import { forwardRef } from 'react';
 
 const Input = forwardRef(function Input(
-  { label, error, helperText, type = 'text', className = '', id, ...rest },
+  { label, error, helperText, type = 'text', icon: Icon, className = '', id, required, ...rest },
   ref
 ) {
   const inputId = id || label?.toLowerCase().replace(/\s+/g, '-');
   const isTextarea = type === 'textarea';
 
-  const sharedClasses = `
-    w-full bg-gray-800 border rounded-lg px-4 py-2.5 text-sm text-white
-    placeholder:text-gray-500 transition-all duration-200 outline-none
+  const baseInputClasses = `
+    w-full bg-[#1A222E] border rounded-lg py-2.5 text-sm text-[#FAF8F3]
+    placeholder:text-[#8B9099] transition-all duration-150 outline-none
+    ${Icon ? 'pl-10 pr-3.5' : 'px-3.5'}
     ${error
-      ? 'border-red-500 focus:ring-2 focus:ring-red-500/30'
-      : 'border-gray-700 focus:border-[#C5A46D] focus:ring-2 focus:ring-[#C5A46D]/20'
+      ? 'border-[#C94F50] focus:ring-2 focus:ring-[#C94F50]/20'
+      : 'border-gray-700/80 hover:border-gray-600 focus:border-[#C5A46D] focus:ring-2 focus:ring-[#C5A46D]/20'
     }
     ${className}
   `;
 
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1.5 w-full">
       {label && (
-        <label htmlFor={inputId} className="block text-sm font-medium text-gray-300">
-          {label}
+        <label htmlFor={inputId} className="block text-xs font-semibold uppercase tracking-wider text-gray-300">
+          {label} {required && <span className="text-[#C5A46D]">*</span>}
         </label>
       )}
 
-      {isTextarea ? (
-        <textarea
-          ref={ref}
-          id={inputId}
-          className={`${sharedClasses} min-h-[100px] resize-y`}
-          {...rest}
-        />
-      ) : (
-        <input
-          ref={ref}
-          id={inputId}
-          type={type}
-          className={sharedClasses}
-          {...rest}
-        />
-      )}
+      <div className="relative">
+        {Icon && (
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+            <Icon className="w-4 h-4" />
+          </div>
+        )}
 
-      {error && <p className="text-xs text-red-400">{error}</p>}
-      {!error && helperText && <p className="text-xs text-gray-500">{helperText}</p>}
+        {isTextarea ? (
+          <textarea
+            ref={ref}
+            id={inputId}
+            required={required}
+            className={`${baseInputClasses} min-h-[96px] resize-y`}
+            {...rest}
+          />
+        ) : (
+          <input
+            ref={ref}
+            id={inputId}
+            type={type}
+            required={required}
+            className={baseInputClasses}
+            {...rest}
+          />
+        )}
+      </div>
+
+      {error && <p className="text-xs text-[#C94F50] mt-1">{error}</p>}
+      {!error && helperText && <p className="text-xs text-[#8B9099] mt-1">{helperText}</p>}
     </div>
   );
 });

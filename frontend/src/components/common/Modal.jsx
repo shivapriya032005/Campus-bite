@@ -48,25 +48,25 @@ export default function Modal({ isOpen, onClose, title, children, maxWidth = 'md
       <div
         className={`
           w-full ${MAX_WIDTHS[maxWidth] || MAX_WIDTHS.md}
-          bg-gray-800 border border-gray-700 rounded-xl shadow-2xl
-          animate-in zoom-in-95 duration-200
+          bg-[#18212D] border border-gray-750 rounded-2xl shadow-2xl shadow-black/60
+          overflow-hidden
         `}
       >
         {/* Header */}
         {title && (
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700">
-            <h2 className="text-lg font-semibold text-white">{title}</h2>
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-750 bg-[#141B24]">
+            <h2 className="text-lg font-semibold text-white tracking-tight">{title}</h2>
             <button
               onClick={onClose}
-              className="p-1 rounded-lg text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"
+              className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-750 transition-colors cursor-pointer"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
         )}
 
         {/* Body */}
-        <div className="px-6 py-4">{children}</div>
+        <div className="px-6 py-5 max-h-[80vh] overflow-y-auto">{children}</div>
       </div>
     </div>
   );
