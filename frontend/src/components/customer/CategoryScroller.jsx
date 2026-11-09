@@ -119,3 +119,4 @@ export default function CategoryScroller({ activeCategory, onSelectCategory }) {
     </div>
   );
 }
+

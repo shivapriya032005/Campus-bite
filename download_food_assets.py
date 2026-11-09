@@ -94,3 +94,4 @@ for rel_path, url in ASSETS.items():
         print(f"Failed {rel_path}: {e}")
 
 print("Asset preparation finished!")
+

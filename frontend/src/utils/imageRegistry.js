@@ -117,3 +117,4 @@ export function getRestaurantImage(restaurant) {
 
   return PLACEHOLDERS.restaurant;
 }
+

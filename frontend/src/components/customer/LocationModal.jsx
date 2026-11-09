@@ -100,3 +100,4 @@ export default function LocationModal({ isOpen, onClose, currentLocation, onSele
     </Modal>
   );
 }
+

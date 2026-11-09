@@ -163,3 +163,4 @@ export default function DishCard({ item, restaurant }) {
     </div>
   );
 }
+

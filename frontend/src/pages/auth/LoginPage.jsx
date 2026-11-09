@@ -39,7 +39,11 @@ export default function LoginPage() {
         navigate('/restaurants');
       }
     } catch (err) {
-      const msg = err.response?.data?.detail || 'Invalid email or password';
+      const msg =
+        err.response?.data?.detail ||
+        (err.message === 'Network Error'
+          ? 'Network or connection error. Please verify backend is reachable.'
+          : 'Invalid email or password');
       toast.error(msg);
     } finally {
       setLoading(false);
