@@ -87,7 +87,16 @@ async def ask_insight(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="OpenAI package is not installed.",
         )
+    except HTTPException:
+        raise
     except Exception as e:
+        if type(e).__name__ == "RateLimitError" or getattr(e, "status_code", None) == 429:
+            logger.warning("OpenAI rate limit hit: %s", e)
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="The AI service is busy right now. Please wait a moment and try again.",
+                headers={"Retry-After": "30"},
+            )
         logger.error("OpenAI API error: %s", e)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,

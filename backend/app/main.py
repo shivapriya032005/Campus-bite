@@ -73,6 +73,7 @@ async def log_requests(request: Request, call_next):
     started_at = time.perf_counter()
     response = await call_next(request)
     elapsed_ms = (time.perf_counter() - started_at) * 1000
+    response.headers["X-Process-Time-Ms"] = f"{elapsed_ms:.2f}"
     logger.info(
         "%s %s -> %s (%.2f ms)",
         request.method,
