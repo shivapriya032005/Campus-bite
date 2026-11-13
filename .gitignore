@@ -17,3 +17,7 @@ coverage/
 .DS_Store
 .idea/
 .vscode/
+
+# Local CA certificates for the Docker build (see backend/certs/.gitkeep and Dockerfile)
+backend/certs/*
+!backend/certs/.gitkeep

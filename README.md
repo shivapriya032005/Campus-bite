@@ -128,6 +128,17 @@ campusbite/
    - Interactive Swagger Docs: `http://localhost:8000/docs`
    - MySQL 8.4 Server: `localhost:3306`
    - Migrations run automatically on start; the stale-order scheduler runs inside the API process.
+   - Load the demo restaurants and accounts (section 6) into the fresh database:
+     ```bash
+     docker compose exec backend python -m app.db.seed
+     ```
+
+   **Troubleshooting**
+   - *MySQL port 3306 already in use* (a local MySQL service): `MYSQL_HOST_PORT=3307 docker compose up --build`
+     (PowerShell: `$env:MYSQL_HOST_PORT=3307; docker compose up --build`). The API reaches MySQL inside Docker, so nothing else changes.
+   - *`CERTIFICATE_VERIFY_FAILED` during the image build*: your antivirus or corporate proxy is re-signing HTTPS traffic.
+     Export its root certificate as a PEM `.crt` file into `backend/certs/` (git-ignored, never committed) and rebuild.
+     The Dockerfile adds any certificates found there to the build's trusted CAs.
 
 3. **Start the React frontend development server:**
    ```bash

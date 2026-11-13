@@ -32,7 +32,8 @@ services:
     volumes:
       - campusbite_mysql_data:/var/lib/mysql   # persistent storage
     healthcheck:
-      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      # (healthcheck.sh only exists in MariaDB images; ping over TCP so the init-time temp server doesn't count)
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -64,6 +65,12 @@ services:
     <<: *app
     restart: unless-stopped
     command: ["python", "-m", "app.scheduler"]
+    healthcheck:   # no web server here: the image's HTTP check does not apply; verify DB access instead
+      test: ["CMD", "python", "-c", "from sqlalchemy import text; from app.db.session import engine; engine.connect().execute(text('SELECT 1'))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
     read_only: true
     tmpfs:
       - /tmp
