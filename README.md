@@ -251,6 +251,23 @@ If you execute `python -m app.db.seed`, the following accounts are pre-configure
 | **Restaurant Owner** | `owner@campus.edu` | `Owner1234!` | Kitchen orders, menu editor, courier dispatch, refunds |
 | **Delivery Courier** | `courier@campus.edu` | `Courier1234!` | Courier hub, active delivery runs, delivery history |
 
+### Demo restaurant owners
+
+The seed also creates seven more restaurants. Each has its own owner account, and **all of them use the password `Owner1234!`**:
+
+| Restaurant | Owner email |
+|---|---|
+| The Campus Bistro & Grill | `owner@campus.edu` |
+| Piazza Napoli Wood-Fired Pizzeria | `owner_pizza@campus.edu` |
+| Royal Nizam Dum Biryani | `owner_biryani@campus.edu` |
+| Dakshin Express Dosa & Idli Bar | `owner_dosa@campus.edu` |
+| Golden Dragon Asian Wok | `owner_wok@campus.edu` |
+| Punjab Junction Dhaba | `owner_dhaba@campus.edu` |
+| Sweet Tooth Patisserie & Bakes | `owner_sweet@campus.edu` |
+| Green Fuel Wellness Cafe | `owner_green@campus.edu` |
+
+These are demo-only credentials for local development. Change or remove them before any real deployment. Accounts you register yourself as an owner or courier need admin approval (see section 5b).
+
 ---
 
 ## 7. Testing Suite

@@ -23,6 +23,16 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _drop_index_if_exists(name: str, table: str, alt_names: tuple = ()) -> None:
+    """Drop an index by any of its known names. Databases created via ``create_all`` (instead of
+    migration 001) name some indexes differently, so a missing name must not abort the upgrade."""
+    existing = {ix["name"] for ix in sa.inspect(op.get_bind()).get_indexes(table)}
+    for candidate in (name, *alt_names):
+        if candidate in existing:
+            op.drop_index(candidate, table_name=table)
+            return
+
+
 def _is_mysql() -> bool:
     return op.get_bind().dialect.name == "mysql"
 
@@ -149,17 +159,20 @@ def upgrade() -> None:
     op.create_index("ix_orders_status_updated_at", "orders", ["status", "updated_at"])
     op.create_index("ix_orders_restaurant_created", "orders", ["restaurant_id", "created_at"])
     op.create_index("ix_orders_customer_created", "orders", ["customer_id", "created_at"])
-    op.drop_index("ix_orders_status", table_name="orders")
-    op.drop_index("ix_orders_restaurant_id", table_name="orders")
-    op.drop_index("ix_orders_customer_id", table_name="orders")
+    _drop_index_if_exists("ix_orders_status", "orders")
+    _drop_index_if_exists("ix_orders_restaurant_id", "orders")
+    _drop_index_if_exists("ix_orders_customer_id", "orders")
 
     op.create_index("ix_reviews_restaurant_created", "reviews", ["restaurant_id", "created_at"])
-    op.drop_index("ix_reviews_restaurant_id", table_name="reviews")
+    _drop_index_if_exists("ix_reviews_restaurant_id", "reviews")
 
     op.create_index(
         "ix_delivery_partner_assigned", "delivery_assignments", ["delivery_partner_id", "assigned_at"]
     )
-    op.drop_index("ix_delivery_assignments_partner_id", table_name="delivery_assignments")
+    _drop_index_if_exists(
+        "ix_delivery_assignments_partner_id", "delivery_assignments",
+        ("ix_delivery_assignments_delivery_partner_id",),
+    )
 
 
 def downgrade() -> None:
