@@ -6,6 +6,7 @@ import { useToast } from '../../components/common/Toast';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import Card from '../../components/common/Card';
+import { getErrorMessage } from '../../api/client';
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState({
@@ -47,10 +48,14 @@ export default function RegisterPage() {
         phone: formData.phone || null,
         address: formData.address || null,
       });
-      toast.success('Registration successful! Please log in.');
+      toast.success(
+        formData.role === 'customer'
+          ? 'Registration successful! Please log in.'
+          : 'Registration successful! An administrator must approve your account before you can start; you can log in to check your status.'
+      );
       navigate('/login');
     } catch (err) {
-      const msg = err.response?.data?.detail || 'Registration failed';
+      const msg = getErrorMessage(err, 'Registration failed');
       toast.error(msg);
     } finally {
       setLoading(false);

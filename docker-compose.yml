@@ -1,3 +1,5 @@
+# Development stack: hot reload, source bind-mounted, in-process scheduler, MySQL port published.
+# Production: see docker-compose.prod.yml.
 services:
   db:
     image: mysql:8.4
@@ -22,12 +24,15 @@ services:
   backend:
     build:
       context: ./backend
+      target: dev
     container_name: campusbite-api
     restart: unless-stopped
     env_file:
       - .env
     environment:
       MYSQL_HOST: db
+      DATABASE_URL_OVERRIDE: ""   # always use the MySQL container here, even if .env points at SQLite
+      SCHEDULER_ENABLED: "true"   # dev: scheduler runs inside the API process (lease-guarded)
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     volumes:

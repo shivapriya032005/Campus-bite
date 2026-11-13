@@ -1,25 +1,10 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import {
-  ShoppingBag,
-  Trash2,
-  Plus,
-  Minus,
-  ArrowRight,
-  MapPin,
-  FileText,
-  ShieldCheck,
-  Store,
-  CreditCard,
-  Sparkles,
-  Clock,
-  CheckCircle2,
-  AlertCircle,
-} from 'lucide-react';
+import { ShoppingBag, Trash2, Plus, Minus, ArrowRight, MapPin, FileText, ShieldCheck, Store, CheckCircle2 } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../components/common/Toast';
-import api from '../../api/client';
+import api, { getErrorMessage } from '../../api/client';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
 import EmptyState from '../../components/common/EmptyState';
@@ -70,7 +55,7 @@ export default function CartPage() {
       clearCart();
       navigate(`/orders/${res.data.id}`);
     } catch (err) {
-      const msg = err.response?.data?.detail || 'Failed to place order';
+      const msg = getErrorMessage(err, 'Failed to place order');
       toast.error(msg);
     } finally {
       setLoading(false);

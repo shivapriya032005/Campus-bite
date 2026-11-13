@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Sparkles, Send, Bot, User, AlertCircle, HelpCircle } from 'lucide-react';
-import api from '../../api/client';
+import { Sparkles, Send, Bot, User, AlertCircle } from 'lucide-react';
+import api, { getErrorMessage } from '../../api/client';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
@@ -46,8 +46,8 @@ export default function InsightsPage() {
             role: 'assistant',
             isError: true,
             content:
-              err.response?.data?.detail ||
-              'OpenAI API is currently not configured on the server. Please ensure OPENAI_API_KEY is configured in the environment file.',
+              getErrorMessage(err,
+              'OpenAI API is currently not configured on the server. Please ensure OPENAI_API_KEY is configured in the environment file.'),
           },
         ]);
       } else {
@@ -57,8 +57,8 @@ export default function InsightsPage() {
             role: 'assistant',
             isError: true,
             content:
-              err.response?.data?.detail ||
-              'Sorry, I encountered an issue retrieving your insights right now. Please try again shortly.',
+              getErrorMessage(err,
+              'Sorry, I encountered an issue retrieving your insights right now. Please try again shortly.'),
           },
         ]);
       }

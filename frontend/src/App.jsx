@@ -1,36 +1,44 @@
+import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import MainLayout from './components/layout/MainLayout';
 import ProtectedRoute from './components/layout/ProtectedRoute';
+import LoadingSpinner from './components/common/LoadingSpinner';
+import ErrorBoundary from './components/common/ErrorBoundary';
+
+// Landing + auth pages stay in the main bundle (first paint); everything role-specific is
+// code-split so a customer never downloads owner or courier code and vice versa.
 
 // Public pages
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
-import RestaurantsPage from './pages/customer/RestaurantsPage';
-import RestaurantDetailPage from './pages/customer/RestaurantDetailPage';
 
-// Customer pages
-import CartPage from './pages/customer/CartPage';
-import OrdersPage from './pages/customer/OrdersPage';
-import OrderDetailPage from './pages/customer/OrderDetailPage';
-import InsightsPage from './pages/customer/InsightsPage';
+// Customer pages (lazy)
+const RestaurantsPage = lazy(() => import('./pages/customer/RestaurantsPage'));
+const RestaurantDetailPage = lazy(() => import('./pages/customer/RestaurantDetailPage'));
+const CartPage = lazy(() => import('./pages/customer/CartPage'));
+const OrdersPage = lazy(() => import('./pages/customer/OrdersPage'));
+const OrderDetailPage = lazy(() => import('./pages/customer/OrderDetailPage'));
+const InsightsPage = lazy(() => import('./pages/customer/InsightsPage'));
 
-// Owner pages
-import OwnerDashboardPage from './pages/restaurant/OwnerDashboardPage';
-import MenuManagementPage from './pages/restaurant/MenuManagementPage';
-import OwnerOrdersPage from './pages/restaurant/OwnerOrdersPage';
-import DeliveryAssignmentPage from './pages/restaurant/DeliveryAssignmentPage';
-import RefundManagementPage from './pages/restaurant/RefundManagementPage';
-import RemindersPage from './pages/restaurant/RemindersPage';
+// Owner pages (lazy)
+const OwnerDashboardPage = lazy(() => import('./pages/restaurant/OwnerDashboardPage'));
+const MenuManagementPage = lazy(() => import('./pages/restaurant/MenuManagementPage'));
+const OwnerOrdersPage = lazy(() => import('./pages/restaurant/OwnerOrdersPage'));
+const DeliveryAssignmentPage = lazy(() => import('./pages/restaurant/DeliveryAssignmentPage'));
+const RefundManagementPage = lazy(() => import('./pages/restaurant/RefundManagementPage'));
+const RemindersPage = lazy(() => import('./pages/restaurant/RemindersPage'));
 
-// Delivery pages
-import DeliveryDashboardPage from './pages/delivery/DeliveryDashboardPage';
-import DeliveryDetailPage from './pages/delivery/DeliveryDetailPage';
-import DeliveryHistoryPage from './pages/delivery/DeliveryHistoryPage';
+// Delivery pages (lazy)
+const DeliveryDashboardPage = lazy(() => import('./pages/delivery/DeliveryDashboardPage'));
+const DeliveryDetailPage = lazy(() => import('./pages/delivery/DeliveryDetailPage'));
+const DeliveryHistoryPage = lazy(() => import('./pages/delivery/DeliveryHistoryPage'));
 
 export default function App() {
   return (
     <MainLayout>
+      <ErrorBoundary>
+        <Suspense fallback={<LoadingSpinner />}>
       <Routes>
         {/* Public Routes */}
         <Route path="/" element={<HomePage />} />
@@ -160,6 +168,8 @@ export default function App() {
         {/* Catch-all redirect */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+        </Suspense>
+      </ErrorBoundary>
     </MainLayout>
   );
 }

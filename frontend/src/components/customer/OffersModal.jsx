@@ -1,4 +1,4 @@
-import { Tag, Sparkles, Clock, CheckCircle } from 'lucide-react';
+import { Clock, CheckCircle } from 'lucide-react';
 import Modal from '../common/Modal';
 
 export default function OffersModal({ isOpen, onClose }) {

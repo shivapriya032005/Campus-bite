@@ -1,18 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import {
-  Star,
-  MapPin,
-  Phone,
-  Search,
-  ArrowLeft,
-  ShoppingBag,
-  Clock,
-  Sparkles,
-  Utensils,
-  Leaf,
-  ArrowRight,
-} from 'lucide-react';
+import { Star, MapPin, Phone, Search, ArrowLeft, Clock, Utensils, Leaf, ArrowRight } from 'lucide-react';
 import api from '../../api/client';
 import { useCart } from '../../context/CartContext';
 import { useToast } from '../../components/common/Toast';

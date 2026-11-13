@@ -6,6 +6,7 @@ import { useToast } from '../../components/common/Toast';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import Card from '../../components/common/Card';
+import { getErrorMessage } from '../../api/client';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -39,11 +40,7 @@ export default function LoginPage() {
         navigate('/restaurants');
       }
     } catch (err) {
-      const msg =
-        err.response?.data?.detail ||
-        (err.message === 'Network Error'
-          ? 'Network or connection error. Please verify backend is reachable.'
-          : 'Invalid email or password');
+      const msg = getErrorMessage(err, 'Invalid email or password');
       toast.error(msg);
     } finally {
       setLoading(false);

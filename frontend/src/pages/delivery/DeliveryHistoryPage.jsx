@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { CheckCircle2, Clock, MapPin, ArrowLeft, ArrowRight, Package } from 'lucide-react';
+import { CheckCircle2, Clock, ArrowLeft, ArrowRight, Package } from 'lucide-react';
 import api from '../../api/client';
 import Card from '../../components/common/Card';
 import Badge from '../../components/common/Badge';

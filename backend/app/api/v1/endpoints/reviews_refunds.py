@@ -1,13 +1,14 @@
 """Review, refund, and payment endpoints."""
 
 import uuid
-from datetime import datetime, timezone
-from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy import func, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.security import get_current_user, require_role
+from app.core.timeutil import utcnow
 from app.db.session import get_db
 from app.models.order import Order, OrderStatus
 from app.models.payment_ledger import PaymentEntryType, PaymentLedger, PaymentStatus
@@ -19,7 +20,6 @@ from app.models.user import User
 from app.schemas.order import (
     PaymentLedgerResponse,
     RefundAction,
-    RefundRecordResponse,
     ReturnRequestCreate,
     ReturnRequestResponse,
     ReviewCreate,
@@ -51,8 +51,7 @@ def create_review(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="You can only review delivered orders",
         )
-    existing = db.query(Review).filter(Review.order_id == order_id).first()
-    if existing:
+    if db.query(Review.id).filter(Review.order_id == order_id).first():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Review already submitted for this order")
 
     review = Review(
@@ -64,17 +63,25 @@ def create_review(
     )
     db.add(review)
 
-    # Update restaurant rating
-    restaurant = db.query(Restaurant).filter(Restaurant.id == order.restaurant_id).first()
-    if restaurant:
-        new_total = restaurant.total_reviews + 1
-        new_avg = (
-            (restaurant.avg_rating * restaurant.total_reviews + payload.rating) / new_total
+    # Atomic aggregate update: the database applies the increment under a row lock, so concurrent
+    # reviews can never overwrite each other (no read-modify-write in Python). ``rating_sum`` keeps
+    # the average exact instead of compounding rounding errors. In MySQL the SET clauses are
+    # evaluated left to right, so the average is computed from the *old* sum/count before they change.
+    db.execute(
+        update(Restaurant)
+        .where(Restaurant.id == order.restaurant_id)
+        .ordered_values(
+            (Restaurant.avg_rating, func.round((Restaurant.rating_sum + payload.rating) * 1.0 / (Restaurant.total_reviews + 1), 2)),
+            (Restaurant.rating_sum, Restaurant.rating_sum + payload.rating),
+            (Restaurant.total_reviews, Restaurant.total_reviews + 1),
         )
-        restaurant.avg_rating = round(Decimal(str(new_avg)), 2)
-        restaurant.total_reviews = new_total
-
-    db.commit()
+        .execution_options(synchronize_session=False)
+    )
+    try:
+        db.commit()
+    except IntegrityError:  # a concurrent request reviewed the same order first
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Review already submitted for this order")
     db.refresh(review)
     return ReviewResponse.model_validate(review)
 
@@ -82,13 +89,18 @@ def create_review(
 @router.get("/restaurants/{restaurant_id}/reviews", response_model=list[ReviewResponse])
 def list_restaurant_reviews(
     restaurant_id: int,
+    response: Response,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
-    """List reviews for a restaurant (public)."""
+    """List reviews for a restaurant (public, newest first)."""
+    query = db.query(Review).filter(Review.restaurant_id == restaurant_id)
+    response.headers["X-Total-Count"] = str(query.with_entities(func.count(Review.id)).scalar() or 0)
     reviews = (
-        db.query(Review)
-        .filter(Review.restaurant_id == restaurant_id)
-        .order_by(Review.created_at.desc())
+        query.order_by(Review.created_at.desc(), Review.id.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
         .all()
     )
     return [ReviewResponse.model_validate(r) for r in reviews]
@@ -116,8 +128,7 @@ def create_return_request(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Refund requests are only allowed for delivered orders",
         )
-    existing = db.query(ReturnRequest).filter(ReturnRequest.order_id == order_id).first()
-    if existing:
+    if db.query(ReturnRequest.id).filter(ReturnRequest.order_id == order_id).first():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A return request already exists for this order")
 
     rr = ReturnRequest(
@@ -127,7 +138,11 @@ def create_return_request(
         status=ReturnRequestStatus.PENDING,
     )
     db.add(rr)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:  # unique(order_id): a concurrent duplicate request
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A return request already exists for this order")
     db.refresh(rr)
     return ReturnRequestResponse.from_request(rr)
 
@@ -138,16 +153,18 @@ def get_return_request(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get the return request for an order (customer or owner)."""
-    rr = db.query(ReturnRequest).filter(ReturnRequest.order_id == order_id).first()
-    if not rr:
+    """Get the return request for an order (the customer who placed it, or the restaurant's owner)."""
+    row = (
+        db.query(ReturnRequest, Restaurant.owner_id)
+        .join(Order, Order.id == ReturnRequest.order_id)
+        .join(Restaurant, Restaurant.id == Order.restaurant_id)
+        .filter(ReturnRequest.order_id == order_id)
+        .first()
+    )
+    if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No return request found")
-    # Verify access: customer who placed it, or owner of the restaurant
-    order = db.query(Order).filter(Order.id == order_id).first()
-    if not order:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
-    restaurant = db.query(Restaurant).filter(Restaurant.id == order.restaurant_id).first()
-    if current_user.id not in (rr.customer_id, restaurant.owner_id if restaurant else -1):
+    rr, owner_id = row
+    if current_user.id not in (rr.customer_id, owner_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
     return ReturnRequestResponse.from_request(rr)
 
@@ -156,23 +173,36 @@ def get_return_request(
 # Return / refund requests — owner manages
 # ---------------------------------------------------------------------------
 
+def _owner_restaurant(owner: User, db: Session) -> Restaurant:
+    restaurant = db.query(Restaurant).filter(Restaurant.owner_id == owner.id).first()
+    if not restaurant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No restaurant found")
+    return restaurant
+
+
 @router.get("/refunds/pending", response_model=list[ReturnRequestResponse])
 def list_pending_refunds(
+    response: Response,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=100),
     current_user: User = Depends(require_role("owner")),
     db: Session = Depends(get_db),
 ):
-    """List pending return requests for the owner's restaurant."""
-    restaurant = db.query(Restaurant).filter(Restaurant.owner_id == current_user.id).first()
-    if not restaurant:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No restaurant found")
-    requests = (
+    """List pending return requests for the owner's restaurant (single joined query)."""
+    restaurant = _owner_restaurant(current_user, db)
+    query = (
         db.query(ReturnRequest)
         .join(Order, ReturnRequest.order_id == Order.id)
         .filter(
             Order.restaurant_id == restaurant.id,
             ReturnRequest.status == ReturnRequestStatus.PENDING,
         )
-        .order_by(ReturnRequest.created_at.desc())
+    )
+    response.headers["X-Total-Count"] = str(query.with_entities(func.count(ReturnRequest.id)).scalar() or 0)
+    requests = (
+        query.order_by(ReturnRequest.created_at.desc(), ReturnRequest.id.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
         .all()
     )
     return [ReturnRequestResponse.from_request(rr) for rr in requests]
@@ -185,10 +215,13 @@ def handle_refund(
     current_user: User = Depends(require_role("owner")),
     db: Session = Depends(get_db),
 ):
-    """Approve or reject a return/refund request."""
-    restaurant = db.query(Restaurant).filter(Restaurant.owner_id == current_user.id).first()
-    if not restaurant:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No restaurant found")
+    """Approve or reject a return/refund request.
+
+    Approval atomically: marks the request approved, moves the order DELIVERED -> REFUNDED, adds a
+    refund record and a ``refunded`` ledger entry (the original ``mock_paid`` entry is preserved).
+    Both state changes are compare-and-set so a request cannot be processed twice.
+    """
+    restaurant = _owner_restaurant(current_user, db)
 
     rr = db.query(ReturnRequest).filter(ReturnRequest.id == return_request_id).first()
     if not rr:
@@ -204,36 +237,48 @@ def handle_refund(
             detail=f"Request already {rr.status.value}",
         )
 
-    now = datetime.now(timezone.utc)
+    now = utcnow()
+    approve = payload.action == "approve"
+    new_rr_status = ReturnRequestStatus.APPROVED if approve else ReturnRequestStatus.REJECTED
 
-    if payload.action == "approve":
-        rr.status = ReturnRequestStatus.APPROVED
-        rr.resolved_at = now
+    claimed = db.execute(
+        update(ReturnRequest)
+        .where(ReturnRequest.id == rr.id, ReturnRequest.status == ReturnRequestStatus.PENDING)
+        .values(status=new_rr_status, resolved_at=now)
+        .execution_options(synchronize_session=False)
+    )
+    if (claimed.rowcount or 0) != 1:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Request was already processed")
 
-        # Create refund record
-        refund = RefundRecord(
-            order_id=order.id,
-            return_request_id=rr.id,
-            amount=order.total_amount,
+    if approve:
+        moved = db.execute(
+            update(Order)
+            .where(Order.id == order.id, Order.status == OrderStatus.DELIVERED)
+            .values(status=OrderStatus.REFUNDED)
+            .execution_options(synchronize_session=False)
         )
-        db.add(refund)
-
-        # Create refund payment ledger entry
-        refund_payment = PaymentLedger(
-            order_id=order.id,
-            entry_type=PaymentEntryType.REFUND,
-            amount=order.total_amount,
-            status=PaymentStatus.REFUNDED,
-            reference_id=f"REF-{uuid.uuid4().hex[:12].upper()}",
+        if (moved.rowcount or 0) != 1:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Only delivered orders can be refunded",
+            )
+        db.add(RefundRecord(order_id=order.id, return_request_id=rr.id, amount=order.total_amount))
+        db.add(
+            PaymentLedger(
+                order_id=order.id,
+                entry_type=PaymentEntryType.REFUND,
+                amount=order.total_amount,
+                status=PaymentStatus.REFUNDED,
+                reference_id=f"REF-{uuid.uuid4().hex[:12].upper()}",
+            )
         )
-        db.add(refund_payment)
 
-        order.status = OrderStatus.REFUNDED
-    else:
-        rr.status = ReturnRequestStatus.REJECTED
-        rr.resolved_at = now
-
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Refund was already recorded")
     db.refresh(rr)
     return ReturnRequestResponse.from_request(rr)
 
@@ -248,21 +293,23 @@ def list_payments(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """List payment ledger entries for an order."""
-    order = db.query(Order).filter(Order.id == order_id).first()
-    if not order:
+    """List payment ledger entries for an order (customer who placed it, or the restaurant's owner)."""
+    row = (
+        db.query(Order.customer_id, Restaurant.owner_id)
+        .join(Restaurant, Restaurant.id == Order.restaurant_id)
+        .filter(Order.id == order_id)
+        .first()
+    )
+    if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
-
-    # Verify access
-    restaurant = db.query(Restaurant).filter(Restaurant.id == order.restaurant_id).first()
-    if current_user.id not in (order.customer_id, restaurant.owner_id if restaurant else -1):
+    customer_id, owner_id = row
+    if current_user.id not in (customer_id, owner_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
     entries = (
         db.query(PaymentLedger)
         .filter(PaymentLedger.order_id == order_id)
-        .order_by(PaymentLedger.created_at)
+        .order_by(PaymentLedger.created_at, PaymentLedger.id)
         .all()
     )
     return [PaymentLedgerResponse.from_entry(e) for e in entries]
-

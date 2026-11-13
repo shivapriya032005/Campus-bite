@@ -3,15 +3,15 @@
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import settings
 from app.core.security import require_role
 from app.db.session import get_db
 from app.models.order import Order
-from app.models.order_item import OrderItem
 from app.models.user import User
 from app.schemas.order import InsightRequest, InsightResponse
+from app.services.rate_limit import enforce_rate_limit
 
 logger = logging.getLogger("campusbite.insights")
 
@@ -19,11 +19,12 @@ router = APIRouter(prefix="/insights", tags=["AI Insights"])
 
 
 def _build_order_context(user_id: int, db: Session) -> str:
-    """Build a concise textual summary of the customer's order history."""
+    """Build a concise textual summary of *this* customer's order history (two queries total)."""
     orders = (
         db.query(Order)
+        .options(selectinload(Order.items))
         .filter(Order.customer_id == user_id)
-        .order_by(Order.created_at.desc())
+        .order_by(Order.created_at.desc(), Order.id.desc())
         .limit(20)
         .all()
     )
@@ -32,17 +33,16 @@ def _build_order_context(user_id: int, db: Session) -> str:
 
     lines = []
     for o in orders:
-        items = db.query(OrderItem).filter(OrderItem.order_id == o.id).all()
-        item_str = ", ".join(f"{i.item_name} x{i.quantity} (${i.subtotal})" for i in items)
+        item_str = ", ".join(f"{i.item_name} x{i.quantity} (${i.subtotal})" for i in o.items)
         lines.append(
             f"Order #{o.id} | {o.status.value} | ${o.total_amount} | "
             f"{o.created_at.strftime('%Y-%m-%d %H:%M')} | Items: {item_str}"
         )
-    return "\n".join(lines)
+    return chr(10).join(lines)
 
 
 @router.post("", response_model=InsightResponse)
-async def ask_insight(
+def ask_insight(
     payload: InsightRequest,
     current_user: User = Depends(require_role("customer")),
     db: Session = Depends(get_db),
@@ -56,6 +56,11 @@ async def ask_insight(
                 "Set the OPENAI_API_KEY environment variable to enable this feature."
             ),
         )
+
+    # Per-user limit protects the OpenAI budget; counted before the (expensive) upstream call.
+    enforce_rate_limit(
+        db, f"ai:{current_user.id}", settings.rate_limit_ai_max, settings.rate_limit_ai_window_seconds
+    )
 
     context = _build_order_context(current_user.id, db)
 

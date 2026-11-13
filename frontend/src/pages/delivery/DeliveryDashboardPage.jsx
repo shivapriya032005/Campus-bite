@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Truck, CheckCircle2, Clock, MapPin, ArrowRight, Package, Navigation, Store } from 'lucide-react';
-import api from '../../api/client';
+import { Truck, CheckCircle2, Clock, ArrowRight, Package } from 'lucide-react';
+import api, { getErrorMessage } from '../../api/client';
 import { useToast } from '../../components/common/Toast';
 import Card from '../../components/common/Card';
 import Badge from '../../components/common/Badge';
@@ -43,7 +43,7 @@ export default function DeliveryDashboardPage() {
       );
       fetchDeliveries();
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Status update failed');
+      toast.error(getErrorMessage(err, 'Status update failed'));
     } finally {
       setUpdatingId(null);
     }

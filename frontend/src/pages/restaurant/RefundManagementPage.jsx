@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { RefreshCcw, CheckCircle2, XCircle, AlertCircle, Clock, DollarSign, Receipt } from 'lucide-react';
-import api from '../../api/client';
+import { RefreshCcw, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import api, { getErrorMessage } from '../../api/client';
 import { useToast } from '../../components/common/Toast';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
@@ -41,7 +41,7 @@ export default function RefundManagementPage() {
       );
       fetchRefunds();
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Action failed');
+      toast.error(getErrorMessage(err, 'Action failed'));
     } finally {
       setActionId(null);
     }

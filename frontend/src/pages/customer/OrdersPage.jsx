@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ClipboardList, ArrowRight, Clock, MapPin, Search } from 'lucide-react';
-import api from '../../api/client';
+import { ClipboardList, ArrowRight, Clock } from 'lucide-react';
+import api, { getErrorMessage } from '../../api/client';
+import { dateRangeParams, isInvertedRange } from '../../utils/dates';
 import Card from '../../components/common/Card';
 import Badge from '../../components/common/Badge';
 import Button from '../../components/common/Button';
-import LoadingSpinner from '../../components/common/LoadingSpinner';
+
 import EmptyState from '../../components/common/EmptyState';
 import Skeleton from '../../components/common/Skeleton';
 import SafeImage from '../../components/common/SafeImage';
@@ -27,34 +28,38 @@ export default function OrdersPage() {
   const [total, setTotal] = useState(0);
   const perPage = 10;
 
-  const fetchOrders = async () => {
-    setLoading(true);
-    try {
-      const params = { page, per_page: perPage };
-      if (statusFilter && statusFilter !== 'ACTIVE') {
-        params.status = statusFilter;
-      }
-      const res = await api.get('/orders/my', { params });
-      let list = res.data.orders || [];
-      if (statusFilter === 'ACTIVE') {
-        list = list.filter((o) =>
-          ['PLACED', 'ACCEPTED', 'PREPARING', 'READY', 'ASSIGNED', 'OUT_FOR_DELIVERY'].includes(
-            o.status
-          )
-        );
-      }
-      setOrders(list);
-      setTotal(res.data.total || 0);
-    } catch (err) {
-      console.error('Failed to load orders', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [error, setError] = useState('');
+  const rangeInvalid = isInvertedRange(dateFrom, dateTo);
 
   useEffect(() => {
-    fetchOrders();
-  }, [page, statusFilter]);
+    if (rangeInvalid) {
+      setError('The "From" date must not be after the "To" date.');
+      return undefined;
+    }
+    let cancelled = false; // ignore responses of superseded requests (fast filter changes)
+    (async () => {
+      setLoading(true);
+      setError('');
+      try {
+        // "ACTIVE" is resolved by the server so pagination and totals stay correct.
+        const params = { page, per_page: perPage, ...dateRangeParams(dateFrom, dateTo) };
+        if (statusFilter) params.status = statusFilter;
+        const res = await api.get('/orders/my', { params });
+        if (cancelled) return;
+        setOrders(res.data.orders || []);
+        setTotal(res.data.total || 0);
+      } catch (err) {
+        if (!cancelled) setError(getErrorMessage(err, 'Failed to load your orders.'));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [page, statusFilter, dateFrom, dateTo, rangeInvalid]);
 
   return (
     <div className="space-y-8 max-w-5xl mx-auto">
@@ -92,6 +97,55 @@ export default function OrdersPage() {
           ))}
         </div>
       </div>
+
+      {/* Date range filter */}
+      <div className="flex flex-wrap items-end gap-3 text-xs text-gray-400">
+        <label className="flex flex-col gap-1">
+          From
+          <input
+            type="date"
+            value={dateFrom}
+            max={dateTo || undefined}
+            onChange={(e) => {
+              setDateFrom(e.target.value);
+              setPage(1);
+            }}
+            className="bg-[#171F2C] border border-gray-800 rounded-lg px-3 py-1.5 text-gray-200 focus:outline-none focus:border-[#C5A46D]"
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          To
+          <input
+            type="date"
+            value={dateTo}
+            min={dateFrom || undefined}
+            onChange={(e) => {
+              setDateTo(e.target.value);
+              setPage(1);
+            }}
+            className="bg-[#171F2C] border border-gray-800 rounded-lg px-3 py-1.5 text-gray-200 focus:outline-none focus:border-[#C5A46D]"
+          />
+        </label>
+        {(dateFrom || dateTo) && (
+          <button
+            type="button"
+            onClick={() => {
+              setDateFrom('');
+              setDateTo('');
+              setPage(1);
+            }}
+            className="px-3 py-1.5 rounded-lg border border-gray-800 hover:text-white cursor-pointer"
+          >
+            Clear dates
+          </button>
+        )}
+      </div>
+
+      {error && (
+        <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          {error}
+        </div>
+      )}
 
       {/* Orders List */}
       {loading ? (

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -8,6 +8,7 @@ from app.db.base import Base
 
 class Review(Base):
     __tablename__ = "reviews"
+    __table_args__ = (Index("ix_reviews_restaurant_created", "restaurant_id", "created_at"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     order_id: Mapped[int] = mapped_column(
@@ -17,7 +18,7 @@ class Review(Base):
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     restaurant_id: Mapped[int] = mapped_column(
-        ForeignKey("restaurants.id", ondelete="CASCADE"), nullable=False, index=True
+        ForeignKey("restaurants.id", ondelete="CASCADE"), nullable=False
     )
     rating: Mapped[int] = mapped_column(Integer, nullable=False)  # 1-5
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -367,6 +367,11 @@ def seed():
                 else:
                     existing_item.image_url = d["image"]
 
+        # Keep the exact rating aggregate consistent with the seeded display ratings so the first
+        # real review updates the average correctly (rating_sum == avg_rating * total_reviews).
+        for restaurant in db.query(Restaurant).filter(Restaurant.rating_sum == 0, Restaurant.total_reviews > 0):
+            restaurant.rating_sum = round(float(restaurant.avg_rating) * restaurant.total_reviews)
+
         db.commit()
         print("Expanded campus food seed completed successfully!")
     except Exception as e:

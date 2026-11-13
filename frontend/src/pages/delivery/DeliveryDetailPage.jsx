@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, MapPin, Phone, User, Store, CheckCircle, Truck, Clock, PackageCheck, AlertCircle } from 'lucide-react';
-import api from '../../api/client';
+import api, { getErrorMessage } from '../../api/client';
 import { useToast } from '../../components/common/Toast';
 import Card from '../../components/common/Card';
 import Badge from '../../components/common/Badge';
@@ -48,7 +48,7 @@ export default function DeliveryDetailPage() {
         fetchDetail();
       }
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Update failed');
+      toast.error(getErrorMessage(err, 'Update failed'));
     } finally {
       setUpdating(false);
     }

@@ -1,26 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import {
-  TrendingUp,
-  Clock,
-  CheckCircle2,
-  AlertTriangle,
-  DollarSign,
-  Utensils,
-  Star,
-  Users,
-  ArrowRight,
-  Plus,
-  BookOpen,
-  Truck,
-  RefreshCcw,
-  Bell,
-  Store,
-} from 'lucide-react';
-import api from '../../api/client';
+import { TrendingUp, Clock, CheckCircle2, AlertTriangle, DollarSign, Utensils, Star, ArrowRight, Truck, RefreshCcw, Store } from 'lucide-react';
+import api, { getErrorMessage } from '../../api/client';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
-import Badge from '../../components/common/Badge';
+
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 
 export default function OwnerDashboardPage() {
@@ -68,7 +52,7 @@ export default function OwnerDashboardPage() {
       });
       fetchDashboardData();
     } catch (err) {
-      alert(err.response?.data?.detail || 'Failed to create restaurant');
+      alert(getErrorMessage(err, 'Failed to create restaurant'));
     } finally {
       setCreating(false);
     }

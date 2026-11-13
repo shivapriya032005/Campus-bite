@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Utensils, Search, Image as ImageIcon } from 'lucide-react';
-import api from '../../api/client';
+import api, { getErrorMessage } from '../../api/client';
 import { useToast } from '../../components/common/Toast';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
@@ -92,7 +92,7 @@ export default function MenuManagementPage() {
       setModalOpen(false);
       fetchItems();
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to save menu item');
+      toast.error(getErrorMessage(err, 'Failed to save menu item'));
     } finally {
       setSaving(false);
     }

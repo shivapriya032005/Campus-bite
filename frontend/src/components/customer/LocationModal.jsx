@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { MapPin, Check, Building2, BookOpen, GraduationCap, Coffee, X } from 'lucide-react';
+import { Check, Building2, BookOpen, GraduationCap, Coffee } from 'lucide-react';
 import Modal from '../common/Modal';
 
 const CAMPUS_LOCATIONS = [

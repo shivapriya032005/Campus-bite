@@ -1,6 +1,7 @@
 """Restaurant endpoints — CRUD + public listing."""
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.security import get_current_user, require_role
@@ -73,7 +74,11 @@ def create_restaurant(
         )
     restaurant = Restaurant(owner_id=current_user.id, **payload.model_dump())
     db.add(restaurant)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:  # unique(owner_id): concurrent duplicate creation
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="You already own a restaurant")
     db.refresh(restaurant)
     return RestaurantResponse.model_validate(restaurant)
 

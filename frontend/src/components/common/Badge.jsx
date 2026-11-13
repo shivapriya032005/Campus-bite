@@ -37,6 +37,32 @@ const STATUS_STYLES = {
     dot: 'bg-rose-400',
   },
 
+  // Payment ledger / reminder states
+  MOCK_PAID: {
+    badge: 'bg-[#248A62]/15 text-[#34D399] border-[#248A62]/30',
+    dot: 'bg-[#248A62]',
+  },
+  VOIDED: {
+    badge: 'bg-gray-700/40 text-gray-300 border-gray-600/50',
+    dot: 'bg-gray-400',
+  },
+  REFUND: {
+    badge: 'bg-rose-500/10 text-rose-400 border-rose-500/30',
+    dot: 'bg-rose-400',
+  },
+  ACTIVE: {
+    badge: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
+    dot: 'bg-amber-400',
+  },
+  RESOLVED: {
+    badge: 'bg-[#248A62]/15 text-[#34D399] border-[#248A62]/30',
+    dot: 'bg-[#248A62]',
+  },
+  DISMISSED: {
+    badge: 'bg-gray-800 text-gray-400 border-gray-700',
+    dot: 'bg-gray-500',
+  },
+
   // Generic variants
   success: {
     badge: 'bg-[#248A62]/15 text-[#34D399] border-[#248A62]/30',

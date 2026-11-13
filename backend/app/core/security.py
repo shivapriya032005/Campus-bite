@@ -11,6 +11,9 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.session import get_db
 
+# Roles that must be approved by an administrator before using their management features.
+APPROVAL_REQUIRED_ROLES = {"owner", "delivery"}
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.api_v1_prefix}/auth/login")
 
 
@@ -73,7 +76,15 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
             detail="Token payload missing subject",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    user = db.query(User).filter(User.id == int(user_id)).first()
+    try:
+        user_pk = int(user_id)
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token subject",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    user = db.query(User).filter(User.id == user_pk).first()
     if user is None or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -91,6 +102,11 @@ def require_role(*roles: str):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You do not have permission to access this resource",
+            )
+        if current_user.role.value in APPROVAL_REQUIRED_ROLES and not current_user.is_approved:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Your account is pending approval",
             )
         return current_user
 

@@ -1,24 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import {
-  ArrowLeft,
-  Clock,
-  MapPin,
-  AlertCircle,
-  CheckCircle2,
-  Star,
-  RefreshCcw,
-  DollarSign,
-  Utensils,
-  Receipt,
-  FileText,
-} from 'lucide-react';
-import api from '../../api/client';
+import { ArrowLeft, Clock, MapPin, AlertCircle, CheckCircle2, Star, RefreshCcw, DollarSign, Receipt } from 'lucide-react';
+import api, { getErrorMessage } from '../../api/client';
 import { useToast } from '../../components/common/Toast';
 import Card from '../../components/common/Card';
 import Badge from '../../components/common/Badge';
 import Button from '../../components/common/Button';
-import LoadingSpinner from '../../components/common/LoadingSpinner';
+
 import Modal from '../../components/common/Modal';
 import Skeleton from '../../components/common/Skeleton';
 import SafeImage from '../../components/common/SafeImage';
@@ -88,7 +76,7 @@ export default function OrderDetailPage() {
       setOrder(res.data);
       toast.success('Order cancelled successfully');
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to cancel order');
+      toast.error(getErrorMessage(err, 'Failed to cancel order'));
     } finally {
       setActionLoading(false);
     }
@@ -103,7 +91,7 @@ export default function OrderDetailPage() {
       setReviewOpen(false);
       fetchOrderDetails();
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to submit review');
+      toast.error(getErrorMessage(err, 'Failed to submit review'));
     } finally {
       setActionLoading(false);
     }
@@ -122,7 +110,7 @@ export default function OrderDetailPage() {
       toast.success('Refund request submitted for restaurant owner audit');
       setRefundOpen(false);
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to submit refund request');
+      toast.error(getErrorMessage(err, 'Failed to submit refund request'));
     } finally {
       setActionLoading(false);
     }
@@ -380,12 +368,18 @@ export default function OrderDetailPage() {
                     <div className="text-right">
                       <span
                         className={`font-bold text-sm ${
-                          p.entry_type === 'refund' ? 'text-red-400' : 'text-emerald-400'
+                          p.entry_type === 'refund'
+                            ? 'text-red-400'
+                            : p.entry_type === 'void'
+                              ? 'text-gray-400'
+                              : 'text-emerald-400'
                         }`}
                       >
-                        {p.entry_type === 'refund' ? '-' : '+'}${Number(p.amount).toFixed(2)}
+                        {p.entry_type === 'refund' ? '-' : p.entry_type === 'void' ? '∅ ' : '+'}${Number(p.amount).toFixed(2)}
                       </span>
-                      <span className="text-gray-500 ml-2 uppercase text-[10px]">({p.status})</span>
+                      <span className="text-gray-500 ml-2 uppercase text-[10px]">
+                        ({p.status.replace('_', ' ')})
+                      </span>
                     </div>
                   </div>
                 ))}

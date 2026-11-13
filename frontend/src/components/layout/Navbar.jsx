@@ -1,27 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import {
-  UtensilsCrossed,
-  ShoppingCart,
-  Menu,
-  X,
-  LogOut,
-  ChevronDown,
-  Store,
-  ClipboardList,
-  Sparkles,
-  LayoutDashboard,
-  BookOpen,
-  Truck,
-  RefreshCcw,
-  Bell,
-  MapPin,
-  Search,
-  Tag,
-  HelpCircle,
-  User as UserIcon,
-  ShieldCheck,
-} from 'lucide-react';
+import { UtensilsCrossed, ShoppingCart, Menu, X, LogOut, ChevronDown, Store, ClipboardList, Sparkles, Truck, RefreshCcw, Bell, MapPin, Search, Tag, HelpCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
 import LocationModal from '../customer/LocationModal';

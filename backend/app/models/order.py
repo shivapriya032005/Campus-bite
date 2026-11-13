@@ -2,7 +2,7 @@ import enum
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, Numeric, String, Text, func
+from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, Index, Numeric, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -36,16 +36,24 @@ VALID_TRANSITIONS: dict[OrderStatus, list[OrderStatus]] = {
 
 class Order(Base):
     __tablename__ = "orders"
+    __table_args__ = (
+        # stale-order reminder scan and status dashboards
+        Index("ix_orders_status_updated_at", "status", "updated_at"),
+        # owner order list / date filters / newest-first paging
+        Index("ix_orders_restaurant_created", "restaurant_id", "created_at"),
+        # customer order history / newest-first paging
+        Index("ix_orders_customer_created", "customer_id", "created_at"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     customer_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     restaurant_id: Mapped[int] = mapped_column(
-        ForeignKey("restaurants.id", ondelete="CASCADE"), nullable=False, index=True
+        ForeignKey("restaurants.id", ondelete="CASCADE"), nullable=False
     )
     status: Mapped[OrderStatus] = mapped_column(
-        SAEnum(OrderStatus), default=OrderStatus.PLACED, nullable=False, index=True
+        SAEnum(OrderStatus), default=OrderStatus.PLACED, nullable=False
     )
     total_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     delivery_address: Mapped[str] = mapped_column(String(500), nullable=False)

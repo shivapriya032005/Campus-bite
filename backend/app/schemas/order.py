@@ -3,23 +3,41 @@
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field
+from typing import Literal
+
+from pydantic import BaseModel, Field, field_validator
 
 
 # ---------------------------------------------------------------------------
 # Cart / Checkout
 # ---------------------------------------------------------------------------
 
+MAX_QUANTITY_PER_ITEM = 50
+
+
 class CartItem(BaseModel):
-    menu_item_id: int
-    quantity: int = Field(..., ge=1)
+    menu_item_id: int = Field(..., ge=1)
+    quantity: int = Field(..., ge=1, le=MAX_QUANTITY_PER_ITEM)
 
 
 class CheckoutRequest(BaseModel):
-    restaurant_id: int
-    items: list[CartItem] = Field(..., min_length=1)
+    restaurant_id: int = Field(..., ge=1)
+    items: list[CartItem] = Field(..., min_length=1, max_length=100)
     delivery_address: str = Field(..., min_length=1, max_length=500)
-    special_instructions: str | None = None
+    special_instructions: str | None = Field(None, max_length=500)
+
+    @field_validator("delivery_address")
+    @classmethod
+    def _address_not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Delivery address must not be blank")
+        return value
+
+    @field_validator("special_instructions")
+    @classmethod
+    def _blank_instructions_to_none(cls, value: str | None) -> str | None:
+        return value.strip() or None if value is not None else None
 
 
 # ---------------------------------------------------------------------------
@@ -37,6 +55,15 @@ class OrderItemResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+def _payment_status(order) -> str | None:
+    """Latest meaningful ledger state: voided > refunded > mock_paid."""
+    entries = {e.status.value for e in order.payment_entries}
+    for state in ("voided", "refunded", "mock_paid"):
+        if state in entries:
+            return state
+    return None
+
+
 class OrderResponse(BaseModel):
     id: int
     customer_id: int
@@ -46,6 +73,7 @@ class OrderResponse(BaseModel):
     delivery_address: str
     special_instructions: str | None
     items: list[OrderItemResponse] = []
+    payment_status: str | None = None  # mock_paid | voided | refunded (from the payment ledger)
     created_at: datetime
     updated_at: datetime
 
@@ -62,6 +90,7 @@ class OrderResponse(BaseModel):
             delivery_address=order.delivery_address,
             special_instructions=order.special_instructions,
             items=[OrderItemResponse.model_validate(i) for i in order.items],
+            payment_status=_payment_status(order),
             created_at=order.created_at,
             updated_at=order.updated_at,
         )
@@ -75,7 +104,11 @@ class OrderListResponse(BaseModel):
 
 
 class OrderStatusUpdate(BaseModel):
-    status: str
+    status: str = Field(..., min_length=1, max_length=32)
+
+
+class DeliveryStatusUpdate(BaseModel):
+    status: Literal["OUT_FOR_DELIVERY", "DELIVERED"]
 
 
 # ---------------------------------------------------------------------------
@@ -116,7 +149,7 @@ class DeliveryAssignmentResponse(BaseModel):
 
 class ReviewCreate(BaseModel):
     rating: int = Field(..., ge=1, le=5)
-    comment: str | None = None
+    comment: str | None = Field(None, max_length=1000)
 
 
 class ReviewResponse(BaseModel):
@@ -136,7 +169,15 @@ class ReviewResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 class ReturnRequestCreate(BaseModel):
-    reason: str = Field(..., min_length=1)
+    reason: str = Field(..., min_length=1, max_length=1000)
+
+    @field_validator("reason")
+    @classmethod
+    def _reason_not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("A reason is required")
+        return value
 
 
 class ReturnRequestResponse(BaseModel):
@@ -213,9 +254,18 @@ class ReminderResponse(BaseModel):
     id: int
     order_id: int
     message: str
+    status: str = "ACTIVE"          # ACTIVE | RESOLVED | DISMISSED
+    trigger_status: str = "PLACED"  # order status that was stale
     created_at: datetime
+    resolved_at: datetime | None = None
+    dismissed_at: datetime | None = None
 
     model_config = {"from_attributes": True}
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def _enum_value(cls, value):
+        return getattr(value, "value", value)
 
 
 # ---------------------------------------------------------------------------

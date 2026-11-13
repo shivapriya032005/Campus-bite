@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ClipboardList, Clock, CheckCircle, Truck, Utensils, MapPin, AlertCircle } from 'lucide-react';
-import api from '../../api/client';
+import { ClipboardList, Clock, CheckCircle, Truck, Utensils, MapPin } from 'lucide-react';
+import api, { getErrorMessage } from '../../api/client';
+import { dateRangeParams, isInvertedRange } from '../../utils/dates';
 import { useToast } from '../../components/common/Toast';
 import Card from '../../components/common/Card';
 import Badge from '../../components/common/Badge';
@@ -12,9 +13,12 @@ import EmptyState from '../../components/common/EmptyState';
 const STATUS_TABS = [
   { label: 'All Kitchen Tickets', value: '' },
   { label: 'Pending (Placed)', value: 'PLACED' },
+  { label: 'Accepted', value: 'ACCEPTED' },
   { label: 'Cooking (Preparing)', value: 'PREPARING' },
   { label: 'Packed (Ready)', value: 'READY' },
+  { label: 'In Delivery', value: 'ASSIGNED,OUT_FOR_DELIVERY' },
   { label: 'Completed', value: 'DELIVERED' },
+  { label: 'Cancelled / Refunded', value: 'CANCELLED,REFUNDED' },
 ];
 
 export default function OwnerOrdersPage() {
@@ -24,6 +28,9 @@ export default function OwnerOrdersPage() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [actionId, setActionId] = useState(null);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const rangeInvalid = isInvertedRange(dateFrom, dateTo);
   const perPage = 10;
 
   const toast = useToast();
@@ -36,6 +43,7 @@ export default function OwnerOrdersPage() {
           status: statusFilter || undefined,
           page,
           per_page: perPage,
+          ...dateRangeParams(dateFrom, dateTo),
         },
       });
       setOrders(res.data.orders || []);
@@ -48,8 +56,8 @@ export default function OwnerOrdersPage() {
   };
 
   useEffect(() => {
-    fetchOrders();
-  }, [page, statusFilter]);
+    if (!rangeInvalid) fetchOrders();
+  }, [page, statusFilter, dateFrom, dateTo]);
 
   const handleStatusTransition = async (orderId, newStatus) => {
     setActionId(orderId);
@@ -58,7 +66,7 @@ export default function OwnerOrdersPage() {
       toast.success(`Order #${orderId} moved to ${newStatus}`);
       fetchOrders();
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Status transition failed');
+      toast.error(getErrorMessage(err, 'Status transition failed'));
     } finally {
       setActionId(null);
     }
@@ -99,6 +107,54 @@ export default function OwnerOrdersPage() {
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Date range filter */}
+      <div className="flex flex-wrap items-end gap-3 text-xs text-gray-400">
+        <label className="flex flex-col gap-1">
+          From
+          <input
+            type="date"
+            value={dateFrom}
+            max={dateTo || undefined}
+            onChange={(e) => {
+              setDateFrom(e.target.value);
+              setPage(1);
+            }}
+            className="bg-[#171F2C] border border-gray-800 rounded-lg px-3 py-1.5 text-gray-200 focus:outline-none focus:border-[#C5A46D]"
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          To
+          <input
+            type="date"
+            value={dateTo}
+            min={dateFrom || undefined}
+            onChange={(e) => {
+              setDateTo(e.target.value);
+              setPage(1);
+            }}
+            className="bg-[#171F2C] border border-gray-800 rounded-lg px-3 py-1.5 text-gray-200 focus:outline-none focus:border-[#C5A46D]"
+          />
+        </label>
+        {(dateFrom || dateTo) && (
+          <button
+            type="button"
+            onClick={() => {
+              setDateFrom('');
+              setDateTo('');
+              setPage(1);
+            }}
+            className="px-3 py-1.5 rounded-lg border border-gray-800 hover:text-white cursor-pointer"
+          >
+            Clear dates
+          </button>
+        )}
+        {rangeInvalid && (
+          <span role="alert" className="text-red-300">
+            The "From" date must not be after the "To" date.
+          </span>
+        )}
       </div>
 
       {/* Orders List */}

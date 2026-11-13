@@ -36,6 +36,10 @@ def list_menu_items(
     if not restaurant:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Restaurant not found")
 
+    if min_price is not None and max_price is not None and min_price > max_price:
+        raise HTTPException(
+            status_code=422, detail="min_price must not exceed max_price"
+        )
     query = db.query(MenuItem).filter(
         MenuItem.restaurant_id == restaurant_id,
         MenuItem.is_available == True,  # noqa: E712

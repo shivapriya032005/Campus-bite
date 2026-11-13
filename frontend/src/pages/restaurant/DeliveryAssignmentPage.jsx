@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Truck, CheckCircle2, User, Phone, MapPin, AlertCircle, Clock } from 'lucide-react';
-import api from '../../api/client';
+import { Truck, MapPin } from 'lucide-react';
+import api, { getErrorMessage } from '../../api/client';
 import { useToast } from '../../components/common/Toast';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
@@ -51,7 +51,7 @@ export default function DeliveryAssignmentPage() {
       toast.success(`Courier dispatched to Order #${orderId}!`);
       fetchData();
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Courier assignment failed');
+      toast.error(getErrorMessage(err, 'Courier assignment failed'));
     } finally {
       setAssigningId(null);
     }

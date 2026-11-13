@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, func
+from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, Index, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -15,13 +15,14 @@ class DeliveryStatus(str, enum.Enum):
 
 class DeliveryAssignment(Base):
     __tablename__ = "delivery_assignments"
+    __table_args__ = (Index("ix_delivery_partner_assigned", "delivery_partner_id", "assigned_at"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     order_id: Mapped[int] = mapped_column(
         ForeignKey("orders.id", ondelete="CASCADE"), unique=True, nullable=False
     )
     delivery_partner_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     status: Mapped[DeliveryStatus] = mapped_column(
         SAEnum(DeliveryStatus), default=DeliveryStatus.ASSIGNED, nullable=False

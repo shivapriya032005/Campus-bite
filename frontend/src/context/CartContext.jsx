@@ -1,4 +1,7 @@
-import { createContext, useContext, useState, useCallback } from 'react'
+import { createContext, useContext, useState, useCallback, useMemo } from 'react'
+
+// Mirrors the backend limit per dish (MAX_QUANTITY_PER_ITEM)
+const MAX_QUANTITY = 50
 
 const CartContext = createContext(null)
 
@@ -23,7 +26,7 @@ export function CartProvider({ children }) {
       const existing = prev.find(i => i.menu_item_id === item.id)
       if (existing) {
         return prev.map(i =>
-          i.menu_item_id === item.id ? { ...i, quantity: i.quantity + 1 } : i
+          i.menu_item_id === item.id ? { ...i, quantity: Math.min(i.quantity + 1, MAX_QUANTITY) } : i
         )
       }
       return [...prev, {
@@ -44,7 +47,7 @@ export function CartProvider({ children }) {
       return
     }
     setItems(prev => prev.map(i =>
-      i.menu_item_id === menuItemId ? { ...i, quantity } : i
+      i.menu_item_id === menuItemId ? { ...i, quantity: Math.min(quantity, MAX_QUANTITY) } : i
     ))
   }, [])
 
@@ -65,14 +68,17 @@ export function CartProvider({ children }) {
     setRestaurantName('')
   }, [])
 
-  const total = items.reduce((sum, i) => sum + i.price * i.quantity, 0)
-  const count = items.reduce((sum, i) => sum + i.quantity, 0)
+  const total = useMemo(() => items.reduce((sum, i) => sum + i.price * i.quantity, 0), [items])
+  const count = useMemo(() => items.reduce((sum, i) => sum + i.quantity, 0), [items])
+
+  // Stable value: consumers re-render only when the cart actually changes.
+  const value = useMemo(() => ({
+    items, restaurantId, restaurantName, total, count,
+    addItem, updateQuantity, removeItem, clearCart,
+  }), [items, restaurantId, restaurantName, total, count, addItem, updateQuantity, removeItem, clearCart])
 
   return (
-    <CartContext.Provider value={{
-      items, restaurantId, restaurantName, total, count,
-      addItem, updateQuantity, removeItem, clearCart,
-    }}>
+    <CartContext.Provider value={value}>
       {children}
     </CartContext.Provider>
   )

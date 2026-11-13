@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Bell, Clock, RefreshCw, AlertTriangle, ArrowRight, CheckCircle2, ShieldAlert } from 'lucide-react';
-import api from '../../api/client';
+import { Clock, RefreshCw, AlertTriangle, ArrowRight, CheckCircle2, ShieldAlert, X } from 'lucide-react';
+import api, { getErrorMessage } from '../../api/client';
 import { useToast } from '../../components/common/Toast';
 import Card from '../../components/common/Card';
+import Badge from '../../components/common/Badge';
 import Button from '../../components/common/Button';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import EmptyState from '../../components/common/EmptyState';
@@ -12,16 +13,18 @@ export default function RemindersPage() {
   const [reminders, setReminders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [view, setView] = useState('active'); // 'active' | 'all' (history)
+  const [dismissingId, setDismissingId] = useState(null);
 
   const toast = useToast();
 
   const fetchReminders = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/reminders');
+      const res = await api.get('/reminders', { params: { status: view } });
       setReminders(res.data || []);
     } catch (err) {
-      toast.error('Failed to load reminders');
+      toast.error(getErrorMessage(err, 'Failed to load reminders'));
     } finally {
       setLoading(false);
     }
@@ -29,7 +32,20 @@ export default function RemindersPage() {
 
   useEffect(() => {
     fetchReminders();
-  }, []);
+  }, [view]);
+
+  const handleDismiss = async (id) => {
+    setDismissingId(id);
+    try {
+      await api.post(`/reminders/${id}/dismiss`);
+      toast.success('Reminder dismissed');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to dismiss reminder'));
+    } finally {
+      setDismissingId(null);
+      fetchReminders();
+    }
+  };
 
   const handleGenerate = async () => {
     setGenerating(true);
@@ -43,7 +59,7 @@ export default function RemindersPage() {
       );
       fetchReminders();
     } catch (err) {
-      toast.error('Failed to trigger reminder check');
+      toast.error(getErrorMessage(err, 'Failed to trigger reminder check'));
     } finally {
       setGenerating(false);
     }
@@ -82,6 +98,26 @@ export default function RemindersPage() {
         </div>
       </Card>
 
+      {/* Active / history switch */}
+      <div className="flex items-center gap-1.5">
+        {[
+          { value: 'active', label: 'Active alerts' },
+          { value: 'all', label: 'History' },
+        ].map((t) => (
+          <button
+            key={t.value}
+            onClick={() => setView(t.value)}
+            className={`text-xs px-3 py-1.5 rounded-full border transition-all cursor-pointer ${
+              view === t.value
+                ? 'bg-[#C5A46D] text-gray-950 font-bold border-[#C5A46D] shadow-sm'
+                : 'bg-[#171F2C] text-gray-400 border-gray-800 hover:text-white hover:border-gray-700'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
       {/* Reminders List */}
       {loading ? (
         <LoadingSpinner />
@@ -102,7 +138,7 @@ export default function RemindersPage() {
         <div className="space-y-3">
           <div className="flex items-center justify-between px-1">
             <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">
-              Active Alerts ({reminders.length})
+              {view === 'active' ? 'Active Alerts' : 'All Reminders'} ({reminders.length})
             </span>
             <span className="text-xs text-gray-500">Most recent first</span>
           </div>
@@ -120,9 +156,13 @@ export default function RemindersPage() {
                   <div>
                     <div className="flex items-center gap-2">
                       <h3 className="text-sm font-bold text-white">Order #{rem.order_id}</h3>
-                      <span className="px-2 py-0.5 text-[10px] font-semibold rounded bg-amber-500/20 text-amber-300 uppercase">
-                        Action Required
-                      </span>
+                      {rem.status === 'ACTIVE' ? (
+                        <span className="px-2 py-0.5 text-[10px] font-semibold rounded bg-amber-500/20 text-amber-300 uppercase">
+                          Action Required
+                        </span>
+                      ) : (
+                        <Badge status={rem.status} dot={false} />
+                      )}
                     </div>
                     <p className="text-xs text-gray-300 mt-1 leading-relaxed">{rem.message}</p>
                   </div>
@@ -139,6 +179,17 @@ export default function RemindersPage() {
                       View Order <ArrowRight className="w-3 h-3 ml-1" />
                     </Button>
                   </Link>
+                  {rem.status === 'ACTIVE' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      loading={dismissingId === rem.id}
+                      onClick={() => handleDismiss(rem.id)}
+                      aria-label={`Dismiss reminder for order ${rem.order_id}`}
+                    >
+                      <X className="w-3.5 h-3.5 mr-1" /> Dismiss
+                    </Button>
+                  )}
                 </div>
               </div>
             </Card>

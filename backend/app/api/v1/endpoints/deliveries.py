@@ -1,11 +1,12 @@
 """Delivery endpoints — assign, update status, view history."""
 
-from datetime import datetime, timezone
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy import func, update
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session, selectinload
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session, joinedload
-
-from app.core.security import get_current_user, require_role
+from app.core.security import require_role
+from app.core.timeutil import utcnow
 from app.db.session import get_db
 from app.models.delivery_assignment import DeliveryAssignment, DeliveryStatus
 from app.models.order import Order, OrderStatus
@@ -14,6 +15,7 @@ from app.models.user import User, UserRole
 from app.schemas.order import (
     DeliveryAssignmentResponse,
     DeliveryAssignRequest,
+    DeliveryStatusUpdate,
     OrderResponse,
 )
 
@@ -52,6 +54,7 @@ def assign_delivery(
         User.id == payload.delivery_partner_id,
         User.role == UserRole.DELIVERY,
         User.is_active == True,  # noqa: E712
+        User.is_approved == True,  # noqa: E712
     ).first()
     if not partner:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Delivery partner not found")
@@ -61,14 +64,26 @@ def assign_delivery(
     if existing:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Order already has a delivery assignment")
 
+    # Compare-and-set READY -> ASSIGNED, then create the assignment, in one transaction.
+    result = db.execute(
+        update(Order)
+        .where(Order.id == order.id, Order.status == OrderStatus.READY)
+        .values(status=OrderStatus.ASSIGNED)
+        .execution_options(synchronize_session=False)
+    )
+    if (result.rowcount or 0) != 1:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Order is no longer READY")
     assignment = DeliveryAssignment(
         order_id=order.id,
         delivery_partner_id=partner.id,
         status=DeliveryStatus.ASSIGNED,
     )
     db.add(assignment)
-    order.status = OrderStatus.ASSIGNED
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Order already has a delivery assignment")
     db.refresh(assignment)
     return DeliveryAssignmentResponse.from_assignment(assignment)
 
@@ -82,10 +97,12 @@ def list_delivery_partners(
     current_user: User = Depends(require_role("owner")),
     db: Session = Depends(get_db),
 ):
-    """List all active delivery partners."""
+    """List all active, approved delivery partners."""
     partners = db.query(User).filter(
-        User.role == UserRole.DELIVERY, User.is_active == True  # noqa: E712
-    ).all()
+        User.role == UserRole.DELIVERY,
+        User.is_active == True,  # noqa: E712
+        User.is_approved == True,  # noqa: E712
+    ).order_by(User.full_name).all()
     return [
         {"id": p.id, "full_name": p.full_name, "email": p.email, "phone": p.phone}
         for p in partners
@@ -98,7 +115,10 @@ def list_delivery_partners(
 
 @router.get("/my", response_model=list[DeliveryAssignmentResponse])
 def list_my_deliveries(
+    response: Response,
     status_filter: str | None = Query(None, alias="status"),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(100, ge=1, le=200),
     current_user: User = Depends(require_role("delivery")),
     db: Session = Depends(get_db),
 ):
@@ -111,7 +131,13 @@ def list_my_deliveries(
             query = query.filter(DeliveryAssignment.status == DeliveryStatus(status_filter))
         except ValueError:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid status filter")
-    assignments = query.order_by(DeliveryAssignment.assigned_at.desc()).all()
+    response.headers["X-Total-Count"] = str(query.with_entities(func.count(DeliveryAssignment.id)).scalar() or 0)
+    assignments = (
+        query.order_by(DeliveryAssignment.assigned_at.desc(), DeliveryAssignment.id.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
     return [DeliveryAssignmentResponse.from_assignment(a) for a in assignments]
 
 
@@ -124,9 +150,12 @@ def get_delivery_detail(
     """Get full delivery detail including customer and restaurant info."""
     assignment = (
         db.query(DeliveryAssignment)
-        .options(joinedload(DeliveryAssignment.order).joinedload(Order.customer))
-        .options(joinedload(DeliveryAssignment.order).joinedload(Order.restaurant))
-        .options(joinedload(DeliveryAssignment.order).joinedload(Order.items))
+        .options(
+            selectinload(DeliveryAssignment.order).selectinload(Order.customer),
+            selectinload(DeliveryAssignment.order).selectinload(Order.restaurant),
+            selectinload(DeliveryAssignment.order).selectinload(Order.items),
+            selectinload(DeliveryAssignment.order).selectinload(Order.payment_entries),
+        )
         .filter(
             DeliveryAssignment.id == assignment_id,
             DeliveryAssignment.delivery_partner_id == current_user.id,
@@ -160,11 +189,11 @@ def get_delivery_detail(
 @router.patch("/my/{assignment_id}/status", response_model=DeliveryAssignmentResponse)
 def update_delivery_status(
     assignment_id: int,
-    payload: dict,
+    payload: DeliveryStatusUpdate,
     current_user: User = Depends(require_role("delivery")),
     db: Session = Depends(get_db),
 ):
-    """Update delivery status (ASSIGNED→OUT_FOR_DELIVERY→DELIVERED)."""
+    """Update delivery status (ASSIGNED -> OUT_FOR_DELIVERY -> DELIVERED) of one of *my* assignments."""
     assignment = db.query(DeliveryAssignment).filter(
         DeliveryAssignment.id == assignment_id,
         DeliveryAssignment.delivery_partner_id == current_user.id,
@@ -172,41 +201,42 @@ def update_delivery_status(
     if not assignment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
 
-    new_status_str = payload.get("status")
-    if not new_status_str:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="status field required")
-
-    try:
-        new_status = DeliveryStatus(new_status_str)
-    except ValueError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid delivery status")
-
-    # Validate transitions
-    valid = {
-        DeliveryStatus.ASSIGNED: [DeliveryStatus.OUT_FOR_DELIVERY],
-        DeliveryStatus.OUT_FOR_DELIVERY: [DeliveryStatus.DELIVERED],
-        DeliveryStatus.DELIVERED: [],
+    new_status = DeliveryStatus(payload.status)
+    transitions = {
+        DeliveryStatus.ASSIGNED: DeliveryStatus.OUT_FOR_DELIVERY,
+        DeliveryStatus.OUT_FOR_DELIVERY: DeliveryStatus.DELIVERED,
     }
-    if new_status not in valid.get(assignment.status, []):
+    if transitions.get(assignment.status) != new_status:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Cannot transition from {assignment.status.value} to {new_status.value}",
         )
 
-    now = datetime.now(timezone.utc)
-    assignment.status = new_status
-    order = db.query(Order).filter(Order.id == assignment.order_id).first()
-
+    now = utcnow()
+    previous_order_status = OrderStatus(assignment.status.value)
+    # Compare-and-set on the order so assignment and order can never diverge.
+    result = db.execute(
+        update(Order)
+        .where(Order.id == assignment.order_id, Order.status == previous_order_status)
+        .values(status=OrderStatus(new_status.value))
+        .execution_options(synchronize_session=False)
+    )
+    if (result.rowcount or 0) != 1:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The order is not in the expected state for this update",
+        )
+    values = {"status": new_status}
     if new_status == DeliveryStatus.OUT_FOR_DELIVERY:
-        assignment.picked_up_at = now
-        if order:
-            order.status = OrderStatus.OUT_FOR_DELIVERY
-    elif new_status == DeliveryStatus.DELIVERED:
-        assignment.delivered_at = now
-        if order:
-            order.status = OrderStatus.DELIVERED
-
+        values["picked_up_at"] = now
+    else:
+        values["delivered_at"] = now
+    db.execute(
+        update(DeliveryAssignment)
+        .where(DeliveryAssignment.id == assignment.id, DeliveryAssignment.status == assignment.status)
+        .values(**values)
+        .execution_options(synchronize_session=False)
+    )
     db.commit()
     db.refresh(assignment)
     return DeliveryAssignmentResponse.from_assignment(assignment)
-

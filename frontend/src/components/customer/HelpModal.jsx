@@ -1,4 +1,4 @@
-import { HelpCircle, Clock, ShieldCheck, Mail, Phone, MessageSquare } from 'lucide-react';
+import { HelpCircle, ShieldCheck } from 'lucide-react';
 import Modal from '../common/Modal';
 
 export default function HelpModal({ isOpen, onClose }) {

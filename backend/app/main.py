@@ -2,7 +2,6 @@ import logging
 import time
 from contextlib import asynccontextmanager
 
-from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -15,8 +14,9 @@ from app.api.v1.endpoints.deliveries import router as delivery_router
 from app.api.v1.endpoints.reviews_refunds import router as reviews_refunds_router
 from app.api.v1.endpoints.dashboard import router as dashboard_router
 from app.api.v1.endpoints.insights import router as insights_router
+from app.api.v1.endpoints.admin import router as admin_router
 from app.core.config import settings
-from app.tasks.reminders import check_stale_orders
+from app.scheduler import build_background_scheduler
 
 # Import models so they are registered with SQLAlchemy metadata
 import app.models  # noqa: F401
@@ -24,18 +24,20 @@ import app.models  # noqa: F401
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("campusbite.api")
 
-scheduler = BackgroundScheduler()
-
-
 @asynccontextmanager
 async def lifespan(application: FastAPI):
-    """Start the background scheduler on startup, shut down on exit."""
-    scheduler.add_job(check_stale_orders, "interval", minutes=5, id="stale_order_check")
-    scheduler.start()
-    logger.info("Background scheduler started — stale-order check every 5 min")
+    """Start the in-process scheduler (dev / single-instance) unless a dedicated one is used."""
+    scheduler = None
+    if settings.scheduler_enabled:
+        scheduler = build_background_scheduler()
+        scheduler.start()
+        logger.info("In-process scheduler started (jobs are guarded by a database lease)")
+    else:
+        logger.info("In-process scheduler disabled (SCHEDULER_ENABLED=false)")
     yield
-    scheduler.shutdown(wait=False)
-    logger.info("Background scheduler stopped")
+    if scheduler is not None:
+        scheduler.shutdown(wait=False)
+        logger.info("Scheduler stopped")
 
 
 app = FastAPI(
@@ -45,19 +47,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-cors_origins = [
-    origin.strip()
-    for origin in settings.frontend_origin.split(",")
-    if origin.strip()
-]
-for local_host in [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]:
-    if local_host not in cors_origins:
-        cors_origins.append(local_host)
+cors_origins = settings.cors_origin_list
 
 app.add_middleware(
     CORSMiddleware,
@@ -97,6 +87,7 @@ app.include_router(delivery_router, prefix=prefix)
 app.include_router(reviews_refunds_router, prefix=prefix)
 app.include_router(dashboard_router, prefix=prefix)
 app.include_router(insights_router, prefix=prefix)
+app.include_router(admin_router, prefix=prefix)
 
 
 @app.get("/", tags=["Root"])

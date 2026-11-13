@@ -214,10 +214,16 @@ def downgrade() -> None:
     op.drop_table("restaurants")
     op.drop_table("users")
     # Drop enum types created by MySQL
-    op.execute("DROP TYPE IF EXISTS userrole")
-    op.execute("DROP TYPE IF EXISTS orderstatus")
-    op.execute("DROP TYPE IF EXISTS paymententrytype")
-    op.execute("DROP TYPE IF EXISTS paymentstatus")
-    op.execute("DROP TYPE IF EXISTS returnrequeststatus")
-    op.execute("DROP TYPE IF EXISTS deliverystatus")
+    if op.get_bind().dialect.name == "postgresql":
+        op.execute("DROP TYPE IF EXISTS userrole")
+    if op.get_bind().dialect.name == "postgresql":
+        op.execute("DROP TYPE IF EXISTS orderstatus")
+    if op.get_bind().dialect.name == "postgresql":
+        op.execute("DROP TYPE IF EXISTS paymententrytype")
+    if op.get_bind().dialect.name == "postgresql":
+        op.execute("DROP TYPE IF EXISTS paymentstatus")
+    if op.get_bind().dialect.name == "postgresql":
+        op.execute("DROP TYPE IF EXISTS returnrequeststatus")
+    if op.get_bind().dialect.name == "postgresql":
+        op.execute("DROP TYPE IF EXISTS deliverystatus")
 

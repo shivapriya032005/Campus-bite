@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Plus, Minus, Check, Star } from 'lucide-react';
+
+import { Plus, Minus } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { useToast } from '../common/Toast';
 import SafeImage from '../common/SafeImage';

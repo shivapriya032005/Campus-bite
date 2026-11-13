@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Search, Star, Utensils, SlidersHorizontal, ArrowUpDown, X, Sparkles, Filter } from 'lucide-react';
+import { Search, Star, Utensils, ArrowUpDown, X, Filter } from 'lucide-react';
 import api from '../../api/client';
 import RestaurantCard from '../../components/customer/RestaurantCard';
 import CategoryScroller from '../../components/customer/CategoryScroller';

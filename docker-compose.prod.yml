@@ -1,0 +1,77 @@
+# Production stack.
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+#
+# * secrets come from the env file at runtime (never baked into an image or committed)
+# * no source mounts, no --reload, non-root containers, MySQL not published to the host
+# * migrations run once in a one-shot `migrate` service, before the API and scheduler start
+# * exactly ONE scheduler process; the API workers run with SCHEDULER_ENABLED=false
+x-app: &app
+  build:
+    context: ./backend
+    target: prod
+  env_file:
+    - ${ENV_FILE:-.env.prod}
+  environment:
+    APP_ENV: production
+    MYSQL_HOST: db
+    MYSQL_PORT: "3306"
+    DATABASE_URL_OVERRIDE: ""
+    SCHEDULER_ENABLED: "false"
+  security_opt:
+    - no-new-privileges:true
+
+services:
+  db:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-campusbite}
+      MYSQL_USER: ${MYSQL_USER:-campusbite_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env.prod}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env.prod}
+    volumes:
+      - campusbite_mysql_data:/var/lib/mysql   # persistent storage
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  migrate:
+    <<: *app
+    restart: "no"
+    command: ["sh", "-c", "python -m app.db.wait && alembic upgrade head"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    <<: *app
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    read_only: true
+    tmpfs:
+      - /tmp
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  scheduler:
+    <<: *app
+    restart: unless-stopped
+    command: ["python", "-m", "app.scheduler"]
+    read_only: true
+    tmpfs:
+      - /tmp
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  campusbite_mysql_data:

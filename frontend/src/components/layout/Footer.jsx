@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { UtensilsCrossed, Shield, Sparkles, Clock, Heart } from 'lucide-react';
+import { UtensilsCrossed, Shield, Sparkles, Clock } from 'lucide-react';
 
 export default function Footer() {
   return (

@@ -1,20 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import {
-  Search,
-  Star,
-  ArrowRight,
-  Sparkles,
-  MapPin,
-  Clock,
-  ShieldCheck,
-  Utensils,
-  Flame,
-  Award,
-  ChevronRight,
-  TrendingUp,
-  Percent,
-} from 'lucide-react';
+import { Search, ArrowRight, Sparkles, Clock, ShieldCheck, Utensils, Award, TrendingUp, Percent } from 'lucide-react';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
